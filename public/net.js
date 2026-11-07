@@ -17,16 +17,35 @@
     return String(s || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5)
   }
 
-  // For testing only: ?signal=localhost:9000 uses a local PeerJS server instead of the public one.
-  function peerOptions () {
-    const sig = params.get('signal')
+  // Where devices get introduced, in the order to try them:
+  //   'proxy'  nithun.no forwards to PeerJS's server (nginx/nithun-website), for networks that block 0.peerjs.com
+  //   'cloud'  PeerJS's public server directly
+  // For testing only: ?signal=localhost:9000 uses a local PeerJS server instead of both.
+  // Either way, game data then goes directly between the devices over WebRTC.
+  const ROUTES = params.get('signal') ? ['signal'] : ['proxy', 'cloud']
+
+  function peerOptions (route) {
     const opts = { debug: 1 }
-    if (sig && /^[\w.-]+:\d+$/.test(sig)) {
-      const [host, port] = sig.split(':')
-      Object.assign(opts, { host, port: Number(port), path: '/', secure: false })
+    if (route === 'signal') {
+      const sig = params.get('signal')
+      if (/^[\w.-]+:\d+$/.test(sig)) {
+        const [host, port] = sig.split(':')
+        Object.assign(opts, { host, port: Number(port), path: '/', secure: false })
+      }
+    } else if (route === 'proxy') {
+      const secure = location.protocol === 'https:'
+      Object.assign(opts, {
+        host: location.hostname,
+        port: Number(location.port) || (secure ? 443 : 80),
+        path: new URL('peer/', location.href).pathname,   // /lab/act-natural/peer/
+        secure,
+      })
     }
-    return opts
+    return opts                                          // 'cloud': PeerJS's defaults
   }
+
+  // Errors that mean "this route can't reach an introduction server", so try the next one.
+  const UNREACHABLE = ['network', 'server-error', 'socket-error', 'socket-closed']
 
   function joinUrl (code) {
     const u = new URL(location.pathname, location.origin)
@@ -46,6 +65,6 @@
   }
 
   window.ActNatural = Object.assign(window.ActNatural || {}, {
-    net: { params, PREFIX, makeCode, cleanCode, peerOptions, joinUrl, store, newToken, INPUT_HZ: 15, POS_HZ: 10 },
+    net: { params, PREFIX, makeCode, cleanCode, peerOptions, ROUTES, UNREACHABLE, joinUrl, store, newToken, INPUT_HZ: 15, POS_HZ: 10 },
   })
 })()

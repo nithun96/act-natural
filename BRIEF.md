@@ -61,6 +61,7 @@ location ^~ /lab/act-natural/ {
 
 - Without the `=` block, `/lab/act-natural` with no trailing slash falls through to `location /` and returns a 404.
 - Check that the PeerJS server's address is still `0.peerjs.com`: open DevTools → Network on a test.
+- **Built (07.11.2026):** Nithun's work laptop blocks PeerJS, so introductions go through a proxy on nithun.no first (`location ^~ /lab/act-natural/peer/` → `https://0.peerjs.com/`, looked up per request so a DNS failure can't stop Nginx starting) and directly to `0.peerjs.com` second. Game data stays direct WebRTC either way. This only helps if the network allows WebRTC itself.
 - Follow the site's `CLAUDE.md`: work on a branch, open a PR and merge it, and the deploy runs itself. Run `npm run build` first, because `scripts/check-site.js` may complain about new files.
 - When the game is retired, list its files in `.github/retired-files.txt`.
 

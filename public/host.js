@@ -26,22 +26,33 @@
   // phones find their way back without scanning again (idea from mafia-online).
   let peer = null
   let takenTries = 0
+  // Introductions go through nithun.no first and PeerJS's own server second (net.ROUTES).
+  // A route that can't be reached before the room opens moves on to the next one.
+  let routeI = 0
+  let routeWraps = 0
   function startHost (code) {
     code = code || net.store.get('host-code') || net.makeCode()
     net.store.set('host-code', code)
-    peer = new Peer(net.PREFIX + code, net.peerOptions())
-    peer.on('open', () => { roomCode = code; netStatus = 'open'; renderLobby() })   // also fires after a reconnect
-    peer.on('connection', conn => conn.on('data', msg => onMessage(conn, msg)))
-    peer.on('disconnected', () => {
-      netStatus = 'Lost contact with the PeerJS server (needed only for new phones to join). Trying again…'
-      renderLobby()
-      setTimeout(() => { if (!peer.destroyed) peer.reconnect() }, 2000)
+    const route = net.ROUTES[routeI]
+    const p = new Peer(net.PREFIX + code, net.peerOptions(route))
+    peer = p
+    p.on('open', () => { if (p !== peer) return; roomCode = code; joinRoute = route; routeWraps = 0; setNet('open') })   // also after a reconnect
+    p.on('connection', conn => conn.on('data', msg => onMessage(conn, msg)))
+    // Losing the PeerJS server only stops new phones joining; phones already in talk to the TV
+    // directly and keep playing. Retry quickly, then less often, for as long as it takes.
+    p.on('disconnected', () => {
+      if (p !== peer || !roomCode) return
+      setNet('down')
+      clearTimeout(reconnectTimer)
+      reconnectTimer = setTimeout(reconnect, Math.min(1000 * 2 ** reconnectTries, 15000))
+      reconnectTries++
     })
-    peer.on('error', err => {
+    p.on('error', err => {
+      if (p !== peer) return
       if (err.type === 'unavailable-id' && !roomCode) {
         // Just after a reload the server can hold the old connection's id for a few seconds.
         // Keep trying the same code for about 30 s; after that another screen has it, so pick a new one.
-        peer.destroy()
+        p.destroy()
         takenTries++
         if (takenTries <= 8) {
           netStatus = `Reopening room ${code}…`
@@ -54,12 +65,56 @@
         return
       }
       if (err.type === 'peer-unavailable') return                                            // a phone left; harmless
-      netStatus = err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error'
-        ? 'Can\'t reach the PeerJS server. Check this computer\'s internet connection.'
-        : 'Network problem: ' + err.type
+      if (net.UNREACHABLE.includes(err.type)) {
+        if (!roomCode) {                                   // never got in on this route: try the next
+          p.destroy()
+          routeI = (routeI + 1) % net.ROUTES.length
+          if (routeI === 0) routeWraps++
+          setNet('down')
+          setTimeout(() => startHost(code), routeWraps ? Math.min(2000 * routeWraps, 15000) : 0)
+          return
+        }
+        setNet('down')
+        return
+      }
+      netStatus = 'Network problem: ' + err.type
       renderLobby()
     })
   }
+  let joinRoute = null
+
+  let reconnectTimer = null
+  let reconnectTries = 0
+  let downSince = null
+  let statusTimer = null
+  function reconnect () {
+    if (!peer || peer.destroyed || !peer.disconnected) return
+    try { peer.reconnect() } catch (e) { /* the next 'disconnected' schedules another try */ }
+  }
+  // Short blips aren't worth a message: say something only if the server is still gone after 5 s.
+  function setNet (state) {
+    clearTimeout(statusTimer)
+    if (state === 'open') {
+      downSince = null
+      reconnectTries = 0
+      netStatus = 'open'
+      renderLobby()
+      return
+    }
+    if (!downSince) downSince = Date.now()
+    statusTimer = setTimeout(() => {
+      if (!downSince) return
+      netStatus = navigator.onLine === false
+        ? 'This computer is offline. New phones can\'t join until it\'s back; players already in can keep playing.'
+        : !roomCode
+          ? `Can't reach a join server yet (tried ${location.hostname} and 0.peerjs.com). Still trying… If this doesn't clear, this network may block it: try another computer.`
+          : 'Reconnecting to the join server… Players already in can keep playing; new phones can join once it\'s back.'
+      renderLobby()
+    }, Math.max(0, 5000 - (Date.now() - downSince)))
+  }
+  // Back online, or the screen woke up: try at once instead of waiting for the next retry.
+  window.addEventListener('online', () => { reconnectTries = 0; reconnect() })
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reconnect() })
 
   function send (conn, msg) {
     if (conn && conn.open) { try { conn.send(msg) } catch (e) { /* closing */ } }
@@ -192,7 +247,7 @@
         `<p class="code" aria-label="Room code ${roomCode.split('').join(' ')}">${roomCode}</p>` +
         `<h3>${players.size} ${players.size === 1 ? 'player' : 'players'}</h3>${list}` +
         (inRound ? '' : button) + status +
-        `<p class="keys">Q hides this panel · N starts a new room</p>`
+        `<p class="keys">Q hides this panel · N starts a new room${joinRoute ? ` · join server: ${joinRoute === 'proxy' ? location.hostname : joinRoute === 'cloud' ? '0.peerjs.com' : 'local test'}` : ''}</p>`
     }
     const btn = document.getElementById('next')
     if (btn) btn.addEventListener('click', nextStep)
