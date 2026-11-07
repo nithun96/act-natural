@@ -42,9 +42,32 @@
   let myPos = null
   let rtt = null
 
+  // ---- No zooming while playing: a pinch or double tap mid-game would wreck the controls ----
+  // Only on the controller; the name form and other pages zoom as normal.
+  const viewport = document.querySelector('meta[name=viewport]')
+  const VIEWPORT = viewport.content
+  let zoomLocked = false
+  const stopGesture = e => { if (zoomLocked) e.preventDefault() }
+  const stopPinch = e => { if (zoomLocked && e.touches && e.touches.length > 1) e.preventDefault() }
+  document.addEventListener('gesturestart', stopGesture, { passive: false })   // iOS Safari
+  document.addEventListener('gesturechange', stopGesture, { passive: false })
+  document.addEventListener('touchmove', stopPinch, { passive: false })
+  let lastTouchEnd = 0
+  document.addEventListener('touchend', e => {                                  // double tap
+    const now = Date.now()
+    if (zoomLocked && now - lastTouchEnd < 350) e.preventDefault()
+    lastTouchEnd = now
+  }, { passive: false })
+  function lockZoom (on) {
+    zoomLocked = on
+    document.documentElement.classList.toggle('no-zoom', on)
+    viewport.content = on ? VIEWPORT + ', maximum-scale=1, user-scalable=no' : VIEWPORT
+  }
+
   // ---- Screens ----
   function showNameForm (note) {
     app.classList.remove('playing')
+    lockZoom(false)
     app.innerHTML =
       `<h1>Room <span class="mono">${esc(code)}</span></h1>` +
       (note ? `<p class="note" role="status">${esc(note)}</p>` : '') +
@@ -67,6 +90,7 @@
 
   function showStatus (text) {
     app.classList.remove('playing')
+    lockZoom(false)
     app.innerHTML = `<p class="status big" role="status">${esc(text)}</p>`
   }
 
@@ -146,6 +170,8 @@
 
   function showController () {
     app.classList.add('playing')
+    lockZoom(true)
+    mapReasons.clear()
     app.innerHTML =
       '<section class="pad" id="pad" aria-label="Joystick: drag anywhere to walk. Arrow keys also work.">' +
       '<p class="padhint" aria-hidden="true">Drag anywhere to walk</p>' +
@@ -174,6 +200,7 @@
       base.style.top = origin.y + 'px'
       knob.style.transform = 'translate(-50%, -50%)'
       stick = { dx: 0, dy: 0, active: true }
+      showMap('stick', true)
       e.preventDefault()
     })
     pad.addEventListener('pointermove', e => {
@@ -190,22 +217,32 @@
       if (e.pointerId !== pid) return
       pid = null
       base.hidden = true
+      showMap('stick', false)
       release()
     }
     pad.addEventListener('pointerup', end)
     pad.addEventListener('pointercancel', end)
 
     const hold = document.getElementById('hold')
-    const showMap = on => { mapEl.hidden = !on; if (on) drawMap() }
-    hold.addEventListener('pointerdown', e => { e.preventDefault(); showMap(true) })
-    hold.addEventListener('pointerup', () => showMap(false))
-    hold.addEventListener('pointercancel', () => showMap(false))
-    hold.addEventListener('pointerleave', () => showMap(false))
-    hold.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); showMap(true) } })
-    hold.addEventListener('keyup', e => { if (e.key === ' ' || e.key === 'Enter') showMap(false) })
+    hold.addEventListener('pointerdown', e => { e.preventDefault(); showMap('hold', true) })
+    hold.addEventListener('pointerup', () => showMap('hold', false))
+    hold.addEventListener('pointercancel', () => showMap('hold', false))
+    hold.addEventListener('pointerleave', () => showMap('hold', false))
+    hold.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); showMap('hold', true) } })
+    hold.addEventListener('keyup', e => { if (e.key === ' ' || e.key === 'Enter') showMap('hold', false) })
     hold.addEventListener('contextmenu', e => e.preventDefault())
 
     keepAwake()
+  }
+
+  // The map shows while your thumb is on the stick or the button is held, and hides the
+  // moment you let go, so it's only on screen while you're actually playing.
+  const mapReasons = new Set()
+  function showMap (reason, on) {
+    if (on) mapReasons.add(reason); else mapReasons.delete(reason)
+    if (!mapEl) return
+    mapEl.hidden = mapReasons.size === 0
+    drawMap()
   }
 
   function release () {
@@ -219,8 +256,8 @@
   function keyStick () {
     let dx = 0, dy = 0
     for (const k of keys) { dx += KEYMAP[k][0]; dy += KEYMAP[k][1] }
-    if (dx || dy) { stick = { dx, dy, active: true }; stickMoved() }
-    else if (stick.active) release()
+    if (dx || dy) { stick = { dx, dy, active: true }; stickMoved(); showMap('keys', true) }
+    else { showMap('keys', false); if (stick.active) release() }
   }
   window.addEventListener('keydown', e => {
     const k = e.key.toLowerCase()
@@ -267,7 +304,11 @@
   }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && joined) keepAwake()
-    if (document.visibilityState === 'hidden' && stick.active) release()
+    if (document.visibilityState === 'hidden') {
+      mapReasons.clear()
+      if (mapEl) mapEl.hidden = true
+      if (stick.active) release()
+    }
   })
 
   // A phone that reloads during a game rejoins on its own.
