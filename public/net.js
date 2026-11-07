@@ -24,8 +24,27 @@
   // Either way, game data then goes directly between the devices over WebRTC.
   const ROUTES = params.get('signal') ? ['signal'] : ['proxy', 'cloud']
 
+  // How devices reach each other once introduced: directly if they can, otherwise through a
+  // relay (TURN). Our own relay on nithun.no first (login from turn.js, made at build time),
+  // then PeerJS's defaults (Google's STUN and PeerJS's public relay).
+  function iceServers () {
+    const t = window.ActNatural.turn
+    const defaults = (window.peerjs && window.peerjs.util && window.peerjs.util.defaultConfig && window.peerjs.util.defaultConfig.iceServers) || []
+    if (!t) return defaults
+    return [
+      { urls: `stun:${t.host}:3478` },
+      {
+        urls: [`turn:${t.host}:3478?transport=udp`, `turn:${t.host}:3478?transport=tcp`, `turns:${t.host}:5349?transport=tcp`],
+        username: t.username,
+        credential: t.credential,
+      },
+      ...defaults,
+    ]
+  }
+
   function peerOptions (route) {
-    const opts = { debug: 1 }
+    const base = (window.peerjs && window.peerjs.util && window.peerjs.util.defaultConfig) || {}
+    const opts = { debug: 1, config: Object.assign({}, base, { iceServers: iceServers() }) }
     if (route === 'signal') {
       const sig = params.get('signal')
       if (/^[\w.-]+:\d+$/.test(sig)) {
