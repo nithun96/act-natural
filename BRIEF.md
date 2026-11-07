@@ -33,7 +33,8 @@ It will live at `nithun.no/lab/act-natural/`. It won't be linked from the site a
   - Host → each phone: `you {role, task, progress, score, phase, timeLeft}` when something changes, plus your own position (or every blob, for the Hunter) 10 times a second.
 - **Reconnect:** a token in localStorage, so a phone that reloads gets the same player back. Persisting the host's own state between reloads isn't needed in v1.
 - **Hit test:** done on the host using the position the Hunter's phone saw. A generous radius covers latency; no rewinding.
-- **Phone UI:** a full-screen joystick, the task list, a small minimap showing only your own dot (hold to show it, so nobody can peek), plus the Wake Lock API to keep the screen on.
+- **Phone UI:** a map at the top showing only your own dot and your next landmark (always visible: decided 07.11.2026 after testing, replacing hold-to-show), the task list, a joystick area below, plus the Wake Lock API to keep the screen on.
+- **Tasks (as built, step 3):** "within range" means within 100 world units of the landmark's centre; the 1.5 s count starts again if you leave the range. Moving inside the range is allowed.
 
 **From mafia-online, borrow ideas, not code.** The repo has no licence, so copying from it needs permission from haryp2309. These parts are worth reading: `client/src/net/hostRuntime.ts` (PeerJS host, reconnect), `shared/views.ts` (what each device is allowed to see) and `client/src/routes.ts` (QR code with the secret in the #fragment). Its MQTT fallback is about 1,400 lines; skip it in v1.
 

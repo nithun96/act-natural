@@ -180,7 +180,34 @@
     }
   }
 
+  // ---- Tasks: three landmarks in order. Stay within range for 1.5 s to tick one off ----
+  const TASK_RANGE = 100      // world units from the landmark's centre
+  const TASK_HOLD = 1.5       // seconds in range, without leaving
+  const TASK_POINTS = 1
+  const ALL_DONE_BONUS = 2
+
+  function dealTasks () {
+    const ids = LANDMARKS.map(l => l.id)
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]]
+    }
+    return { tasks: ids.slice(0, 3), done: 0, hold: 0 }
+  }
+
+  // Advances one player's task. Returns the points earned this step (0 most of the time).
+  function stepTask (t, blob, dt) {
+    if (!t || t.done >= t.tasks.length || blob.out) { if (t) t.hold = 0; return 0 }
+    const lm = LANDMARKS.find(l => l.id === t.tasks[t.done])
+    if (Math.hypot(blob.x - lm.x, blob.y - lm.y) > TASK_RANGE) { t.hold = 0; return 0 }
+    t.hold += dt
+    if (t.hold < TASK_HOLD) return 0
+    t.hold = 0
+    t.done++
+    return TASK_POINTS + (t.done === t.tasks.length ? ALL_DONE_BONUS : 0)
+  }
+
   window.ActNatural = Object.assign(window.ActNatural || {}, {
-    sim: { W, H, BLOB_R, SPEED, MARGIN, STICK_DEADZONE, LANDMARKS, createWorld, addHuman, step, setInput, makeDriver, pickTarget, nearLandmark, rand },
+    sim: { W, H, BLOB_R, SPEED, MARGIN, STICK_DEADZONE, LANDMARKS, createWorld, addHuman, step, TASK_RANGE, TASK_HOLD, dealTasks, stepTask, setInput, makeDriver, pickTarget, nearLandmark, rand },
   })
 })()

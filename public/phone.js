@@ -138,12 +138,17 @@
     if (!msg || typeof msg !== 'object') return
     if (msg.t === 'you') {
       everJoined = true
-      if (!joined) { joined = true; showController() }
+      me = { tasks: Array.isArray(msg.tasks) ? msg.tasks : [], done: msg.done | 0, score: msg.score | 0, hold: 0 }
+      if (!joined) { joined = true; showController() } else renderTasks()
+      drawMap()
     } else if (msg.t === 'full') {
       wantJoin = false
       showNameForm('This game is full (20 players).')
     } else if (msg.t === 'pos') {
       myPos = { x: msg.x, y: msg.y }
+      me.hold = Number(msg.hold) || 0
+      const bar = document.getElementById('holdbar')
+      if (bar) bar.style.width = Math.round(me.hold * 100) + '%'
       drawMap()
     } else if (msg.t === 'pong') {
       const sent = pings.get(msg.id)
@@ -164,28 +169,32 @@
     if (el && rtt != null) el.textContent = Math.round(rtt) + ' ms'
   }, 1000)
 
-  // ---- Controller: a floating joystick anywhere on the screen ----
+  // ---- Controller: map on top, your tasks, and the joystick area below ----
   let stick = { dx: 0, dy: 0, active: false }
   let mapEl = null
+  let me = { tasks: [], done: 0, score: 0, hold: 0 }   // from the TV
+  const LM = () => window.ActNatural.sim.LANDMARKS
+  const lmName = id => (LM().find(l => l.id === id) || { name: id }).name
 
   function showController () {
     app.classList.add('playing')
     lockZoom(true)
-    mapReasons.clear()
     app.innerHTML =
-      '<section class="pad" id="pad" aria-label="Joystick: drag anywhere to walk. Arrow keys also work.">' +
-      '<p class="padhint" aria-hidden="true">Drag anywhere to walk</p>' +
-      '<div class="base" id="base" hidden><div class="knob" id="knob"></div></div>' +
+      '<canvas class="map" id="map" aria-hidden="true"></canvas>' +
+      '<section class="tasks" aria-live="polite">' +
+      '<ol id="tasklist"></ol>' +
+      '<p class="score"><span id="score">0</span> pts <span class="rtt" id="rtt" aria-label="Delay to the TV"></span></p>' +
       '</section>' +
-      '<footer class="bar">' +
-      '<button type="button" class="hold" id="hold">Hold to see where you are</button>' +
-      '<span class="rtt" id="rtt" aria-label="Delay to the TV"></span>' +
-      '</footer>' +
-      '<canvas class="map" id="map" width="320" height="180" hidden aria-hidden="true"></canvas>'
+      '<section class="pad" id="pad" aria-label="Joystick: drag anywhere here to walk. Arrow keys also work.">' +
+      '<p class="padhint" aria-hidden="true">Drag here to walk</p>' +
+      '<div class="base" id="base" hidden><div class="knob" id="knob"></div></div>' +
+      '</section>'
     const pad = document.getElementById('pad')
     const base = document.getElementById('base')
     const knob = document.getElementById('knob')
     mapEl = document.getElementById('map')
+    sizeMap()
+    renderTasks()
     const R = 64
     let origin = null
     let pid = null
@@ -200,7 +209,6 @@
       base.style.top = origin.y + 'px'
       knob.style.transform = 'translate(-50%, -50%)'
       stick = { dx: 0, dy: 0, active: true }
-      showMap('stick', true)
       e.preventDefault()
     })
     pad.addEventListener('pointermove', e => {
@@ -217,33 +225,37 @@
       if (e.pointerId !== pid) return
       pid = null
       base.hidden = true
-      showMap('stick', false)
       release()
     }
     pad.addEventListener('pointerup', end)
     pad.addEventListener('pointercancel', end)
 
-    const hold = document.getElementById('hold')
-    hold.addEventListener('pointerdown', e => { e.preventDefault(); showMap('hold', true) })
-    hold.addEventListener('pointerup', () => showMap('hold', false))
-    hold.addEventListener('pointercancel', () => showMap('hold', false))
-    hold.addEventListener('pointerleave', () => showMap('hold', false))
-    hold.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); showMap('hold', true) } })
-    hold.addEventListener('keyup', e => { if (e.key === ' ' || e.key === 'Enter') showMap('hold', false) })
-    hold.addEventListener('contextmenu', e => e.preventDefault())
-
     keepAwake()
   }
 
-  // The map shows while your thumb is on the stick or the button is held, and hides the
-  // moment you let go, so it's only on screen while you're actually playing.
-  const mapReasons = new Set()
-  function showMap (reason, on) {
-    if (on) mapReasons.add(reason); else mapReasons.delete(reason)
+  // The task list: three landmarks in order. Done ones are ticked, the next one is marked.
+  function renderTasks () {
+    const ol = document.getElementById('tasklist')
+    if (!ol) return
+    if (!me.tasks.length) { ol.innerHTML = '<li class="next">Waiting for tasks…</li>'; return }
+    ol.innerHTML = me.tasks.map((id, i) => {
+      const state = i < me.done ? 'done' : i === me.done ? 'next' : 'later'
+      const label = state === 'done' ? ' (done)' : state === 'next' ? ' (next)' : ''
+      return `<li class="${state}"><span class="tick" aria-hidden="true">${state === 'done' ? '✓' : i + 1}</span>${esc(lmName(id))}<span class="sr">${label}</span>` +
+        (state === 'next' ? '<span class="bar" aria-hidden="true"><span id="holdbar"></span></span>' : '') + '</li>'
+    }).join('') + (me.done >= me.tasks.length ? '<li class="alldone">All three done: +2 bonus</li>' : '')
+    document.getElementById('score').textContent = me.score
+  }
+
+  function sizeMap () {
     if (!mapEl) return
-    mapEl.hidden = mapReasons.size === 0
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const r = mapEl.getBoundingClientRect()
+    mapEl.width = Math.round(r.width * dpr)
+    mapEl.height = Math.round(r.height * dpr)
     drawMap()
   }
+  window.addEventListener('resize', sizeMap)
 
   function release () {
     stick = { dx: 0, dy: 0, active: false }
@@ -256,8 +268,8 @@
   function keyStick () {
     let dx = 0, dy = 0
     for (const k of keys) { dx += KEYMAP[k][0]; dy += KEYMAP[k][1] }
-    if (dx || dy) { stick = { dx, dy, active: true }; stickMoved(); showMap('keys', true) }
-    else { showMap('keys', false); if (stick.active) release() }
+    if (dx || dy) { stick = { dx, dy, active: true }; stickMoved() }
+    else if (stick.active) release()
   }
   window.addEventListener('keydown', e => {
     const k = e.key.toLowerCase()
@@ -282,19 +294,37 @@
   }
   setInterval(() => { if (performance.now() - lastSent >= 1000 / net.INPUT_HZ - 5) sendStick() }, 1000 / net.INPUT_HZ / 2)
 
-  // The hold-to-see map: the room's outline and your own dot, nothing else.
+  // The map: the room, the landmarks by name, your next landmark ringed, and your own dot.
   function drawMap () {
-    if (!mapEl || mapEl.hidden || !myPos) return
+    if (!mapEl || !mapEl.width) return
     const c = mapEl.getContext('2d')
     const w = mapEl.width, h = mapEl.height
+    const k = w / 400                       // text and dots scale with the map
     c.fillStyle = '#1F1C18'; c.fillRect(0, 0, w, h)
-    c.strokeStyle = '#3A342C'; c.lineWidth = 4; c.strokeRect(2, 2, w - 4, h - 4)
-    c.fillStyle = '#B8AE9C'
-    for (const lm of window.ActNatural.sim.LANDMARKS) {
-      c.beginPath(); c.arc(lm.x / 1600 * w, lm.y / 900 * h, 4, 0, Math.PI * 2); c.fill()
+    c.strokeStyle = '#3A342C'; c.lineWidth = 3 * k; c.strokeRect(1.5 * k, 1.5 * k, w - 3 * k, h - 3 * k)
+    const next = me.tasks[me.done]
+    const RANGE = window.ActNatural.sim.TASK_RANGE
+    c.textAlign = 'center'; c.textBaseline = 'top'
+    c.font = `${11 * k}px system-ui, sans-serif`
+    for (const lm of LM()) {
+      const x = lm.x / 1600 * w, y = lm.y / 900 * h
+      if (lm.id === next) {
+        c.beginPath(); c.arc(x, y, RANGE / 1600 * w, 0, Math.PI * 2)
+        c.fillStyle = 'rgba(240,210,140,0.12)'; c.fill()
+        c.strokeStyle = '#F0D28C'; c.lineWidth = 2 * k; c.stroke()
+        if (me.hold > 0) {                  // fills up while you stand there
+          c.beginPath(); c.arc(x, y, RANGE / 1600 * w, -Math.PI / 2, -Math.PI / 2 + me.hold * Math.PI * 2)
+          c.strokeStyle = '#F0D28C'; c.lineWidth = 5 * k; c.stroke()
+        }
+      }
+      c.fillStyle = lm.id === next ? '#F0D28C' : '#B8AE9C'
+      c.beginPath(); c.arc(x, y, 3.5 * k, 0, Math.PI * 2); c.fill()
+      c.fillText(lm.name, x, y + 6 * k)
     }
-    c.fillStyle = '#B48AE8'
-    c.beginPath(); c.arc(myPos.x * w, myPos.y * h, 9, 0, Math.PI * 2); c.fill()
+    if (myPos) {
+      c.fillStyle = '#B48AE8'
+      c.beginPath(); c.arc(myPos.x * w, myPos.y * h, 7 * k, 0, Math.PI * 2); c.fill()
+    }
   }
 
   // Keep the screen on while playing.
@@ -304,11 +334,7 @@
   }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && joined) keepAwake()
-    if (document.visibilityState === 'hidden') {
-      mapReasons.clear()
-      if (mapEl) mapEl.hidden = true
-      if (stick.active) release()
-    }
+    if (document.visibilityState === 'hidden' && stick.active) release()
   })
 
   // A phone that reloads during a game rejoins on its own.
