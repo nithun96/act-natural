@@ -25,59 +25,84 @@
   let netStatus = demo ? 'demo' : 'starting'
   const lobby = demo ? null : buildLobby()
 
-  // The room code is kept in this browser, so reloading the TV keeps the same room and
-  // phones find their way back without scanning again (idea from mafia-online).
+  // The room code and the relay secret are kept in this browser, so reloading the TV keeps the
+  // same room and phones find their way back without scanning again (idea from mafia-online).
+  // The TV is reachable two ways at once (net.js): a PeerJS id for direct links, and the
+  // encrypted MQTT relay (relay.js) for phones that can't link directly.
+  const relay = window.ActNatural.relay
+  let code = null
+  let secret = net.store.get('host-secret')
+  if (!relay.isValidRoomSecret(secret)) { secret = relay.newRoomSecret(); net.store.set('host-secret', secret) }
   let peer = null
+  let peerOpen = false
+  let mqtt = null
+  let mqttOnline = false
   let takenTries = 0
+
+  function useCode (c) {
+    code = c
+    net.store.set('host-code', c)
+    if (mqtt) mqtt.destroy()
+    mqttOnline = false
+    mqtt = new relay.MqttHostServer(c, secret, {
+      onConnection: accept,
+      onStatusChange: online => { mqttOnline = online; updateNet() },
+    })
+  }
+
   // Introductions go through nithun.no first and PeerJS's own server second (net.ROUTES).
   // A route that can't be reached before the room opens moves on to the next one.
   let routeI = 0
   let routeWraps = 0
-  function startHost (code) {
-    code = code || net.store.get('host-code') || net.makeCode()
-    net.store.set('host-code', code)
+  function startHost () {
     const route = net.ROUTES[routeI]
     const p = new Peer(net.PREFIX + code, net.peerOptions(route))
     peer = p
-    p.on('open', () => { if (p !== peer) return; roomCode = code; joinRoute = route; routeWraps = 0; setNet('open') })   // also after a reconnect
-    p.on('connection', conn => conn.on('data', msg => onMessage(conn, msg)))
-    // Losing the PeerJS server only stops new phones joining; phones already in talk to the TV
+    p.on('open', () => {                                  // also after a reconnect
+      if (p !== peer) return
+      p.everOpen = true
+      peerOpen = true
+      takenTries = 0
+      joinRoute = route
+      routeWraps = 0
+      reconnectTries = 0
+      updateNet()
+    })
+    p.on('connection', accept)
+    // Losing the PeerJS server only stops new direct links; phones already in talk to the TV
     // directly and keep playing. Retry quickly, then less often, for as long as it takes.
     p.on('disconnected', () => {
-      if (p !== peer || !roomCode) return
-      setNet('down')
+      if (p !== peer || !p.everOpen) return
+      peerOpen = false
+      updateNet()
       clearTimeout(reconnectTimer)
       reconnectTimer = setTimeout(reconnect, Math.min(1000 * 2 ** reconnectTries, 15000))
       reconnectTries++
     })
     p.on('error', err => {
       if (p !== peer) return
-      if (err.type === 'unavailable-id' && !roomCode) {
+      if (err.type === 'unavailable-id' && !p.everOpen) {
         // Just after a reload the server can hold the old connection's id for a few seconds.
         // Keep trying the same code for about 30 s; after that another screen has it, so pick a new one.
         p.destroy()
         takenTries++
-        if (takenTries <= 8) {
-          netStatus = `Reopening room ${code}…`
-          renderLobby()
-          setTimeout(() => startHost(code), 4000)
-        } else {
-          takenTries = 0
-          startHost(net.makeCode())
-        }
+        if (takenTries > 8) { takenTries = 0; useCode(net.makeCode()) }
+        updateNet()
+        setTimeout(startHost, takenTries ? 4000 : 0)
         return
       }
       if (err.type === 'peer-unavailable') return                                            // a phone left; harmless
       if (net.UNREACHABLE.includes(err.type)) {
-        if (!roomCode) {                                   // never got in on this route: try the next
+        if (!p.everOpen) {                                 // never got in on this route: try the next
           p.destroy()
           routeI = (routeI + 1) % net.ROUTES.length
           if (routeI === 0) routeWraps++
-          setNet('down')
-          setTimeout(() => startHost(code), routeWraps ? Math.min(2000 * routeWraps, 15000) : 0)
+          updateNet()
+          setTimeout(startHost, routeWraps ? Math.min(2000 * routeWraps, 15000) : 0)
           return
         }
-        setNet('down')
+        peerOpen = false
+        updateNet()
         return
       }
       netStatus = 'Network problem: ' + err.type
@@ -85,6 +110,17 @@
     })
   }
   let joinRoute = null
+
+  // Both kinds of link end up here: a PeerJS DataConnection, or a relay link that looks like one.
+  function accept (conn) {
+    conn.on('data', msg => onMessage(conn, msg))
+    // A direct link may still go through our TURN relay; check once ICE has settled.
+    if (!conn.relayed) {
+      conn.on('open', () => setTimeout(async () => {
+        if (conn.open && await relay.usesRelay(conn.peerConnection)) { conn.viaTurn = true; renderLobby() }
+      }, 1500))
+    }
+  }
 
   let reconnectTimer = null
   let reconnectTries = 0
@@ -94,24 +130,30 @@
     if (!peer || peer.destroyed || !peer.disconnected) return
     try { peer.reconnect() } catch (e) { /* the next 'disconnected' schedules another try */ }
   }
-  // Short blips aren't worth a message: say something only if the server is still gone after 5 s.
-  function setNet (state) {
+  // The room is open once either way in works. Short blips aren't worth a message: say
+  // something only if a way in is still missing after 5 s.
+  function updateNet () {
     clearTimeout(statusTimer)
-    if (state === 'open') {
+    if (peerOpen || mqttOnline) roomCode = code
+    if (peerOpen && mqttOnline) {
       downSince = null
-      reconnectTries = 0
       netStatus = 'open'
       renderLobby()
       return
     }
     if (!downSince) downSince = Date.now()
+    if (!roomCode) { netStatus = takenTries ? `Reopening room ${code}…` : 'starting'; renderLobby() }
     statusTimer = setTimeout(() => {
       if (!downSince) return
       netStatus = navigator.onLine === false
         ? 'This computer is offline. New phones can\'t join until it\'s back; players already in can keep playing.'
-        : !roomCode
-          ? `Can't reach a join server yet (tried ${location.hostname} and 0.peerjs.com). Still trying… If this doesn't clear, this network may block it: try another computer.`
-          : 'Reconnecting to the join server… Players already in can keep playing; new phones can join once it\'s back.'
+        : !peerOpen && !mqttOnline
+          ? (roomCode
+            ? 'Reconnecting… Players already in can keep playing; new phones can join once it\'s back.'
+            : `Can't reach a join server or the relay yet (tried ${location.hostname}, 0.peerjs.com and the relay on ${location.hostname}). Still trying… If this doesn't clear, this network may block it: try another computer.`)
+          : !peerOpen
+            ? 'Direct joining is down on this network, so phones join through the encrypted relay: scan the QR code (typing the room code won\'t work).'
+            : 'The relay on ' + location.hostname + ' is unreachable: phones join directly only, so a phone whose network blocks that can\'t get in.'
       renderLobby()
     }, Math.max(0, 5000 - (Date.now() - downSince)))
   }
@@ -136,7 +178,9 @@
       if (p.conn && p.conn !== conn) p.conn.close()
       p.conn = conn
       conn.player = p
-      conn.on('close', () => { if (p.conn === conn) { p.conn = null; sim.setInput(p.blob, 0, 0); renderLobby() } })
+      const gone = () => { if (p.conn === conn) { p.conn = null; sim.setInput(p.blob, 0, 0); renderLobby() } }
+      conn.on('close', gone)
+      conn.on('error', gone)
       sendYou(p)
       if (game.phase === 'round' && game.hunter && game.hunter !== p) sendYou(game.hunter)   // its map gained a blob
       renderLobby()
@@ -237,6 +281,9 @@
     broadcast()
   }
 
+  // How a phone is linked, shown between rounds: nothing when it's direct.
+  const via = conn => conn.relayed ? ' <span class="via">relay</span>' : conn.viaTurn ? ' <span class="via">TURN</span>' : ''
+
   function renderLobby () {
     if (!lobby) return
     if (!roomCode) {
@@ -258,22 +305,22 @@
         button + mapLine + status +
         `<p class="keys">Room ${roomCode}${game.phase === 'results' ? ' · G final scores now' : ''} · Q hides this panel</p>`
     } else {
-      const url = net.joinUrl(roomCode)
+      const url = net.joinUrl(roomCode, secret)
       const qr = qrcode(0, 'M')
       qr.addData(url)
       qr.make()
       const inRound = game.phase === 'round'
       // Mid-round the panel shows no names: a list changing as people join or drop could hint at who is who.
       const list = inRound ? '' : '<ul>' + [...players.values()].sort((a, b) => a.order - b.order)
-        .map(p => `<li${p.conn ? '' : ' class="away"'}><span class="nm">${esc(p.name)}${p.conn ? '' : ' (away)'}</span>${kickButton(p)}</li>`).join('') + '</ul>'
+        .map(p => `<li${p.conn ? '' : ' class="away"'}><span class="nm">${esc(p.name)}${p.conn ? via(p.conn) : ' (away)'}</span>${kickButton(p)}</li>`).join('') + '</ul>'
       lobby.innerHTML =
         `<h2>Join on your phone</h2>` +
-        `<img class="qr" alt="QR code for ${esc(url)}" src="${qr.createDataURL(8, 2)}">` +
+        `<img class="qr" alt="QR code to join room ${roomCode}" src="${qr.createDataURL(8, 2)}">` +
         `<p class="url">or go to <strong>${esc(siteAddress())}</strong> and enter</p>` +
         `<p class="code" aria-label="Room code ${roomCode.split('').join(' ')}">${roomCode}</p>` +
         `<h3>${players.size} ${players.size === 1 ? 'player' : 'players'}</h3>${list}` +
         (inRound ? '' : button + mapLine) + status +
-        `<p class="keys">Q hides this panel · N starts a new room${joinRoute ? ` · join server: ${joinRoute === 'proxy' ? location.hostname : joinRoute === 'cloud' ? '0.peerjs.com' : 'local test'}` : ''}</p>`
+        `<p class="keys">Q hides this panel · N starts a new room${joinRoute ? ` · join server: ${joinRoute === 'proxy' ? location.hostname : joinRoute === 'cloud' ? '0.peerjs.com' : 'local test'}` : ''}${mqttOnline ? ' · relay ready' : ''}</p>`
     }
     for (const kb of lobby.querySelectorAll('button[data-kick]')) kb.addEventListener('click', () => kickPlayer(kb.dataset.kick))
     const btn = document.getElementById('next')
@@ -284,12 +331,14 @@
 
   if (!demo) {
     renderLobby()
+    useCode(net.store.get('host-code') || net.makeCode())
     startHost()
-    window.addEventListener('pagehide', () => { if (peer) peer.destroy() })   // frees the room id at once
+    window.addEventListener('pagehide', () => { if (peer) peer.destroy(); if (mqtt) mqtt.destroy() })   // frees the room id at once
   }
 
   function newRoom () {
     net.store.set('host-code', net.makeCode())
+    net.store.set('host-secret', relay.newRoomSecret())   // a new room gets a new relay secret too
     location.reload()
   }
 

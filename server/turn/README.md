@@ -2,6 +2,8 @@
 
 Phones in Act Natural normally connect straight to the TV over WebRTC. Some networks (office and guest Wi‑Fi, mobile data behind strict NAT) block that, and the phone gets stuck on "Couldn't link directly to the TV". A relay server fixes it: when a direct link fails, phone and TV both send their traffic to the relay, which passes it on. This sets one up on the Hetzner server with coturn, using `turnserver.conf` in this folder. The game gets short-lived logins made from a shared secret when the site is built.
 
+There is a second fallback beside this one: the encrypted message relay (`server/mqtt/README.md`), which works over port 443 even where this one's ports are blocked.
+
 ## Set-up
 
 1. Log in to the server.

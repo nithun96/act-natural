@@ -1,6 +1,9 @@
 // Act Natural: what the TV and the phones share about the network.
-// PeerJS's public server only introduces the devices; game data then goes directly
-// between them over WebRTC.
+// Two ways to reach the TV, the design from mafia-online's docs/p2p-networking.md:
+//   1. direct WebRTC (PeerJS): its public server only introduces the devices, then game data
+//      goes straight between them. Always preferred.
+//   2. the encrypted MQTT relay (relay.js), for networks where 1 can't connect. Needs the
+//      secret from the QR code.
 (function () {
   'use strict'
   const params = new URLSearchParams(location.search)
@@ -24,13 +27,14 @@
   // Either way, game data then goes directly between the devices over WebRTC.
   const ROUTES = params.get('signal') ? ['signal'] : ['proxy', 'cloud']
 
-  // How devices reach each other once introduced: directly if they can, otherwise through a
-  // relay (TURN). Our own relay on nithun.no first (login from turn.js, made at build time),
-  // then PeerJS's defaults (Google's STUN and PeerJS's public relay).
+  // How devices reach each other once introduced: directly if they can (STUN helps them find a
+  // path through home routers), otherwise through our own relay (TURN) on nithun.no, login from
+  // turn.js, made at build time. When even that fails, phones that scanned the QR code use the
+  // encrypted MQTT relay instead (relay.js).
+  const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }]
   function iceServers () {
     const t = window.ActNatural.turn
-    const defaults = (window.peerjs && window.peerjs.util && window.peerjs.util.defaultConfig && window.peerjs.util.defaultConfig.iceServers) || []
-    if (!t) return defaults
+    if (!t) return STUN
     return [
       { urls: `stun:${t.host}:3478` },
       {
@@ -38,7 +42,7 @@
         username: t.username,
         credential: t.credential,
       },
-      ...defaults,
+      ...STUN,
     ]
   }
 
@@ -66,10 +70,13 @@
   // Errors that mean "this route can't reach an introduction server", so try the next one.
   const UNREACHABLE = ['network', 'server-error', 'socket-error', 'socket-closed']
 
-  function joinUrl (code) {
+  // The QR code's link carries the relay secret in the #fragment, which browsers never send to
+  // any server. A typed room code has no secret, so it can only link directly.
+  function joinUrl (code, secret) {
     const u = new URL(location.pathname, location.origin)
     u.searchParams.set('room', code)
     if (params.get('signal')) u.searchParams.set('signal', params.get('signal'))
+    if (secret) u.hash = 'k=' + secret
     return u.toString()
   }
 
@@ -84,6 +91,6 @@
   }
 
   window.ActNatural = Object.assign(window.ActNatural || {}, {
-    net: { params, PREFIX, makeCode, cleanCode, peerOptions, ROUTES, UNREACHABLE, joinUrl, store, newToken, INPUT_HZ: 15, POS_HZ: 10 },
+    net: { params, PREFIX, RELAY_HEAD_START_MS: 5000, DIRECT_TIMEOUT_MS: 15000, UPGRADE_EVERY_MS: 30000, makeCode, cleanCode, peerOptions, ROUTES, UNREACHABLE, joinUrl, store, newToken, INPUT_HZ: 15, POS_HZ: 10 },
   })
 })()

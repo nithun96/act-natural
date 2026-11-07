@@ -33,13 +33,31 @@
   if (!token) { token = net.newToken(); net.store.set('token', token) }
   let name = net.store.get('name') || ''
 
+  // The relay secret from the QR link's #k=… fragment, remembered for this room. A phone that
+  // typed the code has none, so it can only link directly.
+  const relay = window.ActNatural.relay
+  const secret = (() => {
+    const fromLink = new URLSearchParams(location.hash.slice(1)).get('k')
+    if (relay.isValidRoomSecret(fromLink)) { net.store.set('secret-' + code, fromLink); return fromLink }
+    const saved = net.store.get('secret-' + code)
+    return relay.isValidRoomSecret(saved) ? saved : null
+  })()
+  // ?relay skips direct links and uses only the relay (for testing, or networks that need it).
+  const forceRelay = params.has('relay') && !['0', 'false', 'off'].includes(params.get('relay'))
+
   let peer = null
-  let conn = null
+  let active = null        // the link in use; at most one direct and one relay attempt race alongside it
+  let direct = null
+  let relayConn = null
+  let via = null           // 'direct' | 'turn' | 'relay', shown next to the delay
   let joined = false
   let everJoined = false   // once in, a missing TV means it's reloading: keep trying
   let wantJoin = false
   let routeI = 0
+  let attempts = 0
   let retryTimer = null
+  let headStart = null
+  let upgradeTimer = null
   let myPos = null
   let rtt = null
 
@@ -85,7 +103,7 @@
       net.store.set('name', name)
       net.store.set('room', code)
       wantJoin = true
-      showStatus('Connecting… (1 of 3: reaching the join server)')
+      showStatus('Connecting…')
       connect()
     })
   }
@@ -98,69 +116,193 @@
   }
 
   // ---- Connection ----
+  // The design from mafia-online's docs/p2p-networking.md. Direct WebRTC is always preferred.
+  // If it hasn't opened after a head start, the encrypted relay races it and whichever opens
+  // first is used. While on the relay, direct is tried again now and then and takes over.
+  const isOpen = () => !!(active && active.open)
+  const NO_SECRET = ' Scanning the QR code on the TV lets this phone use the relay instead.'
+
   function connect () {
     clearTimeout(retryTimer)
-    if (!peer || peer.destroyed) {
-      // Introductions through nithun.no first, PeerJS's own server second (net.ROUTES).
-      const p = new Peer(net.peerOptions(net.ROUTES[routeI]))
-      peer = p
-      p.on('open', () => { if (p === peer) { p.everOpen = true; openConn() } })
-      p.on('disconnected', () => { if (p === peer && p.everOpen && !p.destroyed) p.reconnect() })
-      p.on('error', err => {
-        if (p !== peer) return
-        if (net.UNREACHABLE.includes(err.type) && !p.everOpen) {   // this route is blocked or down: try the next
-          p.destroy()
-          routeI = (routeI + 1) % net.ROUTES.length
-          if (routeI === 0) { retry('Can\'t reach the join server. Trying again…'); return }
-          connect()
-          return
-        }
-        if (err.type === 'peer-unavailable') {
-          if (everJoined) retry('Lost the TV. Trying again…')
-          else showNameForm(`No game with code ${code} is running. Check the code on the TV.`)
-          return
-        }
-        retry('Connection problem (' + err.type + '). Trying again…')
-      })
-    } else if (peer.open) {
-      openConn()
+    if (!wantJoin || isOpen()) return
+    if (forceRelay) {
+      if (!secret) { stopTrying(); showNameForm('?relay needs the link from the QR code on the TV. Scan it to join.'); return }
+      tryRelay()
+      return
     }
+    if (!peer || peer.destroyed) startPeer()
+    else if (peer.open) tryDirect()
+    else if (peer.disconnected) { try { peer.reconnect() } catch (e) { startPeer() } }
   }
 
   // Steps shown on screen while joining, so a stuck phone says where it's stuck.
-  // The direct link (step 3) can hang when a network blocks device-to-device traffic: give up after 15 s.
-  let linkTimer = null
-  function openConn () {
-    if (conn) conn.close()
-    if (!joined) showStatus('Connecting… (2 of 3: finding the TV)', lastProblem)
+  function progress (step) {
+    if (wantJoin && !joined && !isOpen()) showStatus(`Connecting… (${step})`, lastProblem)
+  }
+
+  // ---- direct (WebRTC via PeerJS) ----
+  function startPeer () {
+    if (peer) peer.destroy()
+    // Introductions through nithun.no first, PeerJS's own server second (net.ROUTES).
+    const p = new Peer(net.peerOptions(net.ROUTES[routeI]))
+    peer = p
+    progress('reaching the join server')
+    p.on('open', () => { if (p === peer) { p.everOpen = true; tryDirect() } })
+    p.on('disconnected', () => {
+      if (p === peer && p.everOpen) setTimeout(() => { if (p === peer && !p.destroyed && p.disconnected) p.reconnect() }, 1500)
+    })
+    p.on('error', err => {
+      if (p !== peer) return
+      if (err.type === 'peer-unavailable') {
+        // The join server doesn't know the TV. It may still be reachable through the relay.
+        if (direct && !direct.open) { direct.close(); direct = null }
+        if (!secret && !everJoined && !isOpen()) {
+          stopTrying()
+          showNameForm(`No game with code ${code} is running. Check the code on the TV, or scan its QR code.`)
+          return
+        }
+        directFailed('Couldn\'t find the TV on the join server. Trying again…')
+        return
+      }
+      if (net.UNREACHABLE.includes(err.type) || err.type === 'browser-incompatible' || err.type === 'webrtc') {
+        if (!p.everOpen) {
+          p.destroy()
+          routeI = (routeI + 1) % net.ROUTES.length
+          if (routeI !== 0) { startPeer(); return }        // this route is blocked or down: try the next
+          peer = null
+        }
+        directFailed('Can\'t reach the join server. Trying again…')
+        // Try the join server again later, unless a link is working by then.
+        setTimeout(() => { if (wantJoin && !isOpen() && (!peer || peer === p)) startPeer() }, 8000)
+      }
+    })
+  }
+
+  function tryDirect () {
+    if (forceRelay || !wantJoin || !peer || !peer.open || direct) return
     const c = peer.connect(net.PREFIX + code, { serialization: 'json' })
-    conn = c
-    clearTimeout(linkTimer)
-    // PeerJS says "peer-unavailable" quickly if the TV isn't there; otherwise we're on to the direct link.
-    setTimeout(() => { if (wantJoin && conn === c && !c.open && !joined) showStatus('Connecting… (3 of 3: linking directly to the TV)', lastProblem) }, 1500)
-    linkTimer = setTimeout(() => {
-      if (!wantJoin || conn !== c || c.open) return
+    direct = c
+    attempts++
+    if (!isOpen()) {
+      progress('linking directly to the TV')
+      // Give direct a head start, then let the relay race it.
+      clearTimeout(headStart)
+      headStart = setTimeout(() => { if (!isOpen()) tryRelay() }, net.RELAY_HEAD_START_MS)
+    }
+    const timeout = setTimeout(() => {
+      if (c.open || c !== direct) return
       c.close()
-      retry('Couldn\'t link directly to the TV. The Wi‑Fi may block devices talking to each other; try mobile data or another network. Trying again…')
-    }, 15000)
-    c.on('open', () => { clearTimeout(linkTimer); c.send({ t: 'join', name, token }) })
-    c.on('data', onMessage)
-    c.on('error', err => { if (conn === c) retry('Connection problem (' + (err && err.type || 'data channel') + '). Trying again…') })
-    c.on('close', () => { if (conn === c && wantJoin) retry('Lost the TV. Trying again…') })
+      direct = null
+      directFailed('Couldn\'t link directly to the TV. The Wi‑Fi may block devices talking to each other.' + (secret ? '' : ' Try mobile data or another network.'))
+    }, net.DIRECT_TIMEOUT_MS)
+    c.on('open', () => {
+      clearTimeout(timeout)
+      if (c !== direct) { c.close(); return }
+      adopt(c)
+      // Give ICE a moment to settle on its final route before checking for a TURN relay.
+      setTimeout(async () => {
+        if (c === active && c.open && await relay.usesRelay(c.peerConnection)) { via = 'turn'; showRtt() }
+      }, 1500)
+    })
+    c.on('data', msg => { if (c === active) onMessage(msg) })
+    c.on('close', () => {
+      clearTimeout(timeout)
+      if (c === direct) direct = null
+      if (c === active) lost()
+    })
+    c.on('error', () => {
+      clearTimeout(timeout)
+      if (c === direct && !c.open) { direct = null; directFailed('Connection problem. Trying again…') }
+    })
+  }
+
+  // Direct didn't work this time: race the relay now, or try again later if there's no secret.
+  function directFailed (text) {
+    if (isOpen()) return
+    if (secret) { lastProblem = text; tryRelay(); return }
+    retry(text + NO_SECRET, Math.min(8000, 2000 * Math.max(1, attempts)))
+  }
+
+  // ---- relay (encrypted MQTT, relay.js) ----
+  function tryRelay () {
+    if (!wantJoin || relayConn || !secret) return
+    const c = new relay.MqttClientConnection(code, secret)
+    relayConn = c
+    progress('trying the encrypted relay')
+    c.on('open', () => {
+      if (c !== relayConn) { c.close(); return }
+      if (isOpen() && active !== c) { relayConn = null; c.close(); return }   // direct won meanwhile
+      adopt(c)
+    })
+    c.on('data', msg => { if (c === active) onMessage(msg) })
+    const gone = () => {
+      if (c === relayConn) relayConn = null
+      if (c === active) lost()
+      else if (!isOpen() && !direct) retry('Couldn\'t reach the TV directly or through the relay. Trying again…', 3000)
+    }
+    c.on('close', gone)
+    c.on('error', gone)
+  }
+
+  // ---- switching ----
+  // Makes `c` the link in use and introduces this phone to the TV on it.
+  function adopt (c) {
+    const previous = active
+    active = c
+    clearTimeout(headStart)
+    clearTimeout(retryTimer)
+    attempts = 0
+    via = c.relayed ? 'relay' : 'direct'
+    c.send({ t: 'join', name, token })
+    if (previous && previous !== c) {        // upgraded (relay → direct): retire the old link
+      if (previous === relayConn) relayConn = null
+      if (previous === direct) direct = null
+      previous.close()
+    }
+    clearInterval(upgradeTimer)
+    upgradeTimer = null
+    if (c.relayed && !forceRelay) {
+      upgradeTimer = setInterval(() => {
+        if (active !== relayConn || direct) return
+        if (peer && peer.open) tryDirect()
+        else if (!peer || peer.destroyed) startPeer()
+      }, net.UPGRADE_EVERY_MS)
+    }
+  }
+
+  function lost () {
+    active = null
+    clearInterval(upgradeTimer)
+    upgradeTimer = null
+    retry('Lost the TV. Trying again…', 1500)
   }
 
   let lastProblem = ''   // kept on screen during the next try, so it doesn't flash past
-  function retry (text) {
+  function retry (text, delay = 2000) {
     if (!wantJoin) return
     lastProblem = text
     showStatus(text)
     joined = false
     clearTimeout(retryTimer)
-    retryTimer = setTimeout(connect, 2000)
+    retryTimer = setTimeout(connect, delay)
   }
 
+  // Kicked, game full, or leaving the page: stop every link and timer.
+  function stopTrying () {
+    wantJoin = false
+    joined = false
+    for (const t of [retryTimer, headStart]) clearTimeout(t)
+    clearInterval(upgradeTimer)
+    const links = [active, direct, relayConn]
+    active = direct = relayConn = null
+    for (const l of links) if (l) l.close()
+    if (peer) { peer.destroy(); peer = null }
+  }
+  window.addEventListener('pagehide', stopTrying)
+  window.addEventListener('pageshow', e => { if (e.persisted) location.reload() })   // back from the page cache with every link closed
+
   function send (msg) {
-    if (conn && conn.open) { try { conn.send(msg) } catch (e) { /* closing */ } }
+    if (isOpen()) { try { active.send(msg) } catch (e) { /* closing */ } }
   }
 
   function onMessage (msg) {
@@ -176,7 +318,7 @@
     } else if (msg.t === 'kicked') {
       showKicked()
     } else if (msg.t === 'full') {
-      wantJoin = false
+      stopTrying()
       showNameForm('This game is full (20 players).')
     } else if (msg.t === 'pos') {
       myPos = { x: msg.x, y: msg.y }
@@ -208,9 +350,13 @@
     pings.set(pingId, performance.now())
     if (pings.size > 10) pings.delete(pings.keys().next().value)
     send({ t: 'ping', id: pingId })
-    const el = document.getElementById('rtt')
-    if (el && rtt != null) el.textContent = Math.round(rtt) + ' ms'
+    showRtt()
   }, 1000)
+  // The delay to the TV, and how this phone is linked when it isn't directly.
+  function showRtt () {
+    const el = document.getElementById('rtt')
+    if (el && rtt != null) el.textContent = Math.round(rtt) + ' ms' + (via === 'relay' ? ' · relay' : via === 'turn' ? ' · TURN' : '')
+  }
 
   // ---- Screens by game phase: controller (lobby and hiding), Hunter, caught, results ----
   let screen = null
@@ -535,11 +681,7 @@
   // ---- Caught: out until the round ends ----
   // Removed by the host: stop trying, and don't rejoin by itself after a reload.
   function showKicked () {
-    wantJoin = false
-    joined = false
-    clearTimeout(retryTimer)
-    clearTimeout(linkTimer)
-    conn = null                          // timers from the last connection attempt check this
+    stopTrying()
     net.store.set('room', '')
     screen = 'kicked'
     app.classList.remove('playing')
@@ -579,6 +721,8 @@
     try { if (navigator.wakeLock && !lock) { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => { lock = null }) } } catch (e) { /* not allowed: fine */ }
   }
   document.addEventListener('visibilitychange', () => {
+    // Phones drop links when the screen locks: reconnect as soon as it's back.
+    if (document.visibilityState === 'visible' && wantJoin && !isOpen()) { clearTimeout(retryTimer); connect() }
     if (document.visibilityState === 'visible' && joined) keepAwake()
     if (document.visibilityState === 'hidden' && stick.active) release()
   })

@@ -32,6 +32,7 @@ It will live at `nithun.no/lab/act-natural/`. It won't be linked from the site a
 - **Dependencies:** PeerJS (UMD `peerjs.min.js` from the npm package) and a small QR library (`qrcode-generator`). Both are npm dependencies with exact versions in `package.json` (changed from copied files on 07.11.2026); `vite.config.js` copies them into `dist/lab/act-natural/vendor/`, so the CSP stays `script-src 'self'`.
 - **The host page is the server:** `?host` runs the simulation at 60 fps, draws the TV and holds all state. Phones open `?room=CODE`.
 - **Networking:** PeerJS with host id `act-natural-nithun-<CODE>`. The public PeerJS server only introduces devices; data then flows directly over WebRTC.
+- **Relay (Nov 2026):** the TV is also reachable through an encrypted MQTT relay, the design from mafia-online's `docs/p2p-networking.md`, ported to plain JS in `relay.js` with haryp2309's go-ahead. Phones race direct against the relay after 5 s and move back to direct when they can; the relay key travels only in the QR code's `#k=` fragment. The broker is our own Mosquitto on the server behind Nginx (`server/mqtt/README.md`), not mafia-online's public brokers: those throttled the game's 15 messages a second to a few, with seconds of delay.
 - **Messages:**
   - Phone → host: `join {name, token}` once, and `in {dx, dy}` 15 times a second while the stick is moved, plus one zero when it's released. The host stops a blob if it hears nothing for 500 ms.
   - Hunter → host: `shoot {x, y}` in world coordinates.
@@ -41,7 +42,7 @@ It will live at `nithun.no/lab/act-natural/`. It won't be linked from the site a
 - **Phone UI:** a map at the top showing only your own dot and your next landmark (always visible: decided 07.11.2026 after testing, replacing hold-to-show), the task list, a joystick area below, plus the Wake Lock API to keep the screen on.
 - **Tasks (as built, step 3):** "within range" means within 100 world units of the landmark's centre; the 1.5 s count starts again if you leave the range. Moving inside the range is allowed.
 
-**From mafia-online, borrow ideas, not code.** The repo has no licence, so copying from it needs permission from haryp2309. These parts are worth reading: `client/src/net/hostRuntime.ts` (PeerJS host, reconnect), `shared/views.ts` (what each device is allowed to see) and `client/src/routes.ts` (QR code with the secret in the #fragment). Its MQTT fallback is about 1,400 lines; skip it in v1.
+**From mafia-online, borrow ideas, not code.** The repo has no licence, so copying from it needs permission from haryp2309. These parts are worth reading: `client/src/net/hostRuntime.ts` (PeerJS host, reconnect), `shared/views.ts` (what each device is allowed to see) and `client/src/routes.ts` (QR code with the secret in the #fragment). Its MQTT fallback was skipped in v1 and added later (see Relay above).
 
 ## Deployment on nithun.no (the trap)
 

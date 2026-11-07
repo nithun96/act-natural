@@ -1,0 +1,3 @@
+# Mosquitto topic rules for Act Natural. Copy to /etc/mosquitto/act-natural.acl (README.md).
+# Rules before any "user" line apply to anonymous clients: only the game's own topics.
+topic readwrite actn/v1/#
