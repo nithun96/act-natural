@@ -14,42 +14,9 @@
   const demoHumans = Math.max(0, Math.min(20, parseInt(params.get('demo') || '0', 10) || 0))
   const world = sim.createWorld({ humans: demoHumans })
 
-  // ---- Fake humans: drive the same joystick path real phones will use ----
-  // They follow the bot rule but only through setInput, 15 times a second, with a
-  // little wobble in direction, a reaction delay and the 30% deadzone, like a thumb.
-  const INPUT_HZ = 15
-  const fakes = world.blobs.filter(b => b.kind === 'human').map(b => ({
-    blob: b, target: null, pause: sim.rand(0, 2), clock: Math.random() / INPUT_HZ, react: 0,
-  }))
-
-  function driveFakes (dt) {
-    for (const f of fakes) {
-      f.clock -= dt
-      if (f.clock > 0) continue
-      f.clock += 1 / INPUT_HZ
-      const b = f.blob
-      if (f.pause > 0) {
-        f.pause -= 1 / INPUT_HZ
-        if (f.pause <= 0) { f.target = sim.pickTarget(); f.react = sim.rand(0.05, 0.25) }
-        // A released stick sends one zero, then nothing (the host times out after 500 ms).
-        if (b.input.dx || b.input.dy) sim.setInput(b, 0, 0)
-        continue
-      }
-      if (f.react > 0) { f.react -= 1 / INPUT_HZ; continue }
-      if (!f.target) f.target = sim.pickTarget()
-      const dx = f.target.x - b.x
-      const dy = f.target.y - b.y
-      if (Math.hypot(dx, dy) < 8) {
-        sim.setInput(b, 0, 0)
-        f.target = null
-        f.pause = sim.rand(0.5, 3)
-        continue
-      }
-      const a = Math.atan2(dy, dx) + sim.rand(-0.05, 0.05)
-      const mag = sim.rand(0.75, 1)
-      sim.setInput(b, Math.cos(a) * mag, Math.sin(a) * mag)
-    }
-  }
+  // ---- Fake humans: the same virtual thumb as the bots, through the human joystick path ----
+  const fakes = world.blobs.filter(b => b.kind === 'human')
+  for (const b of fakes) b.driver = sim.makeDriver()
 
   // ---- Canvas, scaled to fit the TV with the room's 16:9 shape kept ----
   const canvas = document.createElement('canvas')
@@ -161,16 +128,18 @@
   }
 
   // Every blob is drawn by this one function, whatever it is.
-  function drawBlob (b, reveal) {
+  function drawBlob (b, reveal, alpha) {
     const R = sim.BLOB_R
+    const x = b.px + (b.x - b.px) * alpha
+    const y = b.py + (b.y - b.py) * alpha
     const moving = b.vx || b.vy
     const bob = moving && !reduceMotion ? Math.sin(b.walkPhase) : 0
     const sx = 1 + bob * 0.06
     const sy = 1 - bob * 0.06
-    ctx.beginPath(); ctx.ellipse(b.x, b.y + R * 0.85, R * 0.9, R * 0.35, 0, 0, Math.PI * 2)
+    ctx.beginPath(); ctx.ellipse(x, y + R * 0.85, R * 0.9, R * 0.35, 0, 0, Math.PI * 2)
     ctx.fillStyle = C.shadow; ctx.fill()
     ctx.save()
-    ctx.translate(b.x, b.y)
+    ctx.translate(x, y)
     ctx.scale(sx, sy)
     const isHuman = reveal && b.kind === 'human'
     ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2)
@@ -206,7 +175,7 @@
     if (fpsClock >= 0.5) { fps = fpsFrames / fpsClock; fpsFrames = 0; fpsClock = 0 }
     if (!paused) {
       acc += dt
-      while (acc >= STEP) { driveFakes(STEP); sim.step(world, STEP); acc -= STEP }
+      while (acc >= STEP) { sim.step(world, STEP); acc -= STEP }
     }
     draw()
     requestAnimationFrame(frame)
@@ -222,7 +191,8 @@
     for (const lm of world.landmarks) drawLandmark(lm, world.time)
     // Draw in y order so overlaps look natural and tell nothing.
     const order = world.blobs.slice().sort((a, b) => a.y - b.y)
-    for (const b of order) drawBlob(b, reveal)
+    const alpha = paused ? 1 : acc / STEP   // draw between the last two steps (smooth at 120 Hz)
+    for (const b of order) drawBlob(b, reveal, alpha)
     for (const lm of world.landmarks) drawCanopy(lm)
     for (const lm of world.landmarks) drawLabel(lm)
 

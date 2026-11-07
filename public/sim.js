@@ -44,11 +44,10 @@
     const p = randomPoint()
     return {
       id, kind,                     // kind: 'bot' | 'human'
-      x: p.x, y: p.y, vx: 0, vy: 0,
+      x: p.x, y: p.y, px: p.x, py: p.y, vx: 0, vy: 0,
       facing: Math.random() * Math.PI * 2,
       walkPhase: Math.random() * 10,
-      // bot state
-      target: null, pause: rand(0, 2),
+      driver: null,               // set for bots and fake humans
       // human state
       input: { dx: 0, dy: 0, age: Infinity },
       name: null, out: false,
@@ -58,7 +57,7 @@
   function createWorld ({ humans = 0 } = {}) {
     const bots = Math.max(16, humans * 2)
     const blobs = []
-    for (let i = 0; i < bots; i++) blobs.push(makeBlob('b' + i, 'bot'))
+    for (let i = 0; i < bots; i++) { const b = makeBlob('b' + i, 'bot'); b.driver = makeDriver(); blobs.push(b) }
     for (let i = 0; i < humans; i++) blobs.push(makeBlob('h' + i, 'human'))
     // Shuffle so draw order (and therefore overlap) gives nothing away.
     for (let i = blobs.length - 1; i > 0; i--) {
@@ -75,26 +74,66 @@
     blob.input.age = 0
   }
 
-  function stepBot (b, dt) {
-    if (b.pause > 0) {
-      b.pause -= dt
-      b.vx = b.vy = 0
-      if (b.pause <= 0) b.target = pickTarget()
+  // ---- The wanderer: one "virtual thumb" that drives bots and fake humans alike ----
+  // It follows the bot rule (pick a target, walk, pause 0.5–3 s) but only through the
+  // joystick, 15 times a second, the way a phone will: a short reaction delay before
+  // setting off, a heading that wobbles and drifts so paths curve a little, and now and
+  // then a hesitation mid-walk. Bots and fake humans run the same code, so in the demo
+  // nothing can tell them apart; real players are the test from step 2 on.
+  const INPUT_HZ = 15
+  const ARRIVE = 10
+
+  function makeDriver () {
+    return {
+      target: null, pause: rand(0, 2), react: 0, clock: Math.random() / INPUT_HZ,
+      drift: 0, driftRate: 0, hesitateIn: rand(2, 10),
+    }
+  }
+
+  function driveTick (d, b) {
+    const tick = 1 / INPUT_HZ
+    if (d.pause > 0) {
+      d.pause -= tick
+      if (d.pause <= 0) {
+        if (!d.target) d.target = pickTarget()
+        d.react = rand(0.05, 0.3)
+        d.drift = rand(-0.35, 0.35)          // start a little off the straight line…
+        d.driftRate = rand(-0.25, 0.25)      // …and curve back or away while walking
+      }
+      if (b.input.dx || b.input.dy) setInput(b, 0, 0)   // a released stick sends one zero
       return
     }
-    if (!b.target) b.target = pickTarget()
-    const dx = b.target.x - b.x
-    const dy = b.target.y - b.y
-    const d = Math.hypot(dx, dy)
-    if (d <= SPEED * dt) {
-      b.x = b.target.x; b.y = b.target.y
-      b.vx = b.vy = 0
-      b.target = null
-      b.pause = rand(0.5, 3)
+    if (d.react > 0) { d.react -= tick; return }
+    if (!d.target) d.target = pickTarget()
+    const dx = d.target.x - b.x
+    const dy = d.target.y - b.y
+    const dist = Math.hypot(dx, dy)
+    if (dist < ARRIVE) {
+      setInput(b, 0, 0)
+      d.target = null
+      d.pause = rand(0.5, 3)
       return
     }
-    b.vx = dx / d * SPEED
-    b.vy = dy / d * SPEED
+    d.hesitateIn -= tick
+    if (d.hesitateIn <= 0) {             // stop for a moment, keep the same target
+      d.hesitateIn = rand(4, 14)
+      d.pause = rand(0.2, 0.9)
+      setInput(b, 0, 0)
+      return
+    }
+    // Drift fades as the target gets close, so the blob still arrives.
+    d.drift += d.driftRate * tick
+    d.drift = clamp(d.drift, -0.5, 0.5)
+    const fade = Math.min(1, dist / 160)
+    const a = Math.atan2(dy, dx) + d.drift * fade + rand(-0.06, 0.06)
+    const mag = rand(0.7, 1)
+    setInput(b, Math.cos(a) * mag, Math.sin(a) * mag)
+  }
+
+  function drive (b, dt) {
+    const d = b.driver
+    d.clock -= dt
+    while (d.clock <= 0) { d.clock += 1 / INPUT_HZ; driveTick(d, b) }
   }
 
   function stepHuman (b, dt) {
@@ -112,8 +151,9 @@
   function step (world, dt) {
     world.time += dt
     for (const b of world.blobs) {
-      if (b.kind === 'bot') stepBot(b, dt)
-      else stepHuman(b, dt)
+      b.px = b.x; b.py = b.y        // for smooth drawing between steps
+      if (b.driver) drive(b, dt)
+      stepHuman(b, dt)
       b.x = clamp(b.x + b.vx * dt, MARGIN, W - MARGIN)
       b.y = clamp(b.y + b.vy * dt, MARGIN, H - MARGIN)
       if (b.vx || b.vy) {
@@ -124,6 +164,6 @@
   }
 
   window.ActNatural = Object.assign(window.ActNatural || {}, {
-    sim: { W, H, BLOB_R, SPEED, MARGIN, STICK_DEADZONE, LANDMARKS, createWorld, step, setInput, pickTarget, nearLandmark, rand },
+    sim: { W, H, BLOB_R, SPEED, MARGIN, STICK_DEADZONE, LANDMARKS, createWorld, step, setInput, makeDriver, pickTarget, nearLandmark, rand },
   })
 })()
