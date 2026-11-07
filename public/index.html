@@ -7,6 +7,7 @@
 <title>Act Natural</title>
 <!-- Party game for the AI workshop (Nov 2026), see ACT-NATURAL-BRIEF.md in the repo.
      Not linked from the site. ?host is the TV, ?room=CODE a phone, ?host&demo=6 the TV with no network.
+     Networking: direct WebRTC (PeerJS) first, the encrypted MQTT relay (relay.js) for networks that block it.
      vendor/: PeerJS and qrcode-generator (both MIT) are npm dependencies (versions in package.json); vite.config.js copies them
      into the build and serves them in `npm run dev`, so the CSP can stay script-src 'self'. -->
 <style>
@@ -112,12 +113,14 @@
   .lobby .kick { margin-left: auto; font: 500 0.75em system-ui, sans-serif; min-height: 28px; padding: 2px 8px; background: none; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; }
   .lobby .kick:hover, .lobby .kick:focus-visible { color: var(--text); border-color: var(--muted); }
   .lobby li .kick { margin-left: 8px; }
+  .lobby .via { font-size: 0.75em; padding: 0 5px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); }
 </style>
 </head>
 <body>
 <script src="vendor/peerjs.min.js"></script>
 <script src="vendor/qrcode.js"></script>
 <script src="turn.js"></script>
+<script src="relay.js"></script>
 <script src="net.js"></script>
 <script src="maps.js"></script>
 <script src="sim.js"></script>
