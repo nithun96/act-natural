@@ -3,11 +3,14 @@
 //   ?host&demo=6   no network: 6 fake humans steered by the same virtual thumb as the bots
 (function () {
   'use strict'
-  const { sim, net, round } = window.ActNatural
+  const { sim, net, round, maps, art } = window.ActNatural
   const params = net.params
   if (!params.has('host')) return   // phone.js handles every other address
 
   const demo = params.has('demo')
+  // The map: chosen in the lobby (M), remembered on this computer. ?map=jaffna picks one directly.
+  let map = maps.byId(params.get('map') || net.store.get('map') || 'park')
+  sim.setMap(map)
   const demoHumans = Math.max(0, Math.min(20, parseInt(params.get('demo') || '0', 10) || 0))
   const world = sim.createWorld({ humans: demoHumans })
 
@@ -158,7 +161,17 @@
     }
   }
 
-  function sendYou (p) { send(p.conn, game.viewFor(p)) }
+  function sendYou (p) { send(p.conn, Object.assign(game.viewFor(p), { map: map.id })) }
+
+  // Change map: only between rounds. Everyone's phone follows.
+  function nextMap () {
+    if (game && game.phase === 'round') return
+    const list = maps.list
+    map = list[(list.indexOf(map) + 1) % list.length]
+    sim.setMap(map)
+    net.store.set('map', map.id)
+    if (game) broadcast()
+  }
 
   function broadcast () {
     for (const p of players.values()) sendYou(p)
@@ -219,9 +232,10 @@
       return
     }
     const status = netStatus === 'open' ? '' : `<p class="status">${esc(netStatus)}</p>`
+    const mapLine = game.phase === 'round' ? '' : `<p class="mapline">Map: <strong>${esc(map.name)}</strong> <button type="button" class="quiet" id="map">Change map <kbd>M</kbd></button></p>`
     const button = game.nextLabel() ? `<button type="button" class="next" id="next"${game.phase === 'lobby' && !game.canStart() ? ' disabled' : ''}>${esc(game.nextLabel())} <kbd>Enter</kbd></button>` : ''
     if (game.phase === 'results' || game.phase === 'over') {
-      const why = { time: 'Time\'s up.', 'all-caught': 'The Hunter caught everyone.', stopped: 'Stopped by the host.' }[game.endReason] || ''
+      const why = { time: 'Time\'s up.', 'all-caught': 'The Hunter caught everyone.', 'all-done': 'The Hunter used every shot and everyone still in finished their tasks.', stopped: 'Stopped by the host.' }[game.endReason] || ''
       const rows = game.scoreboard().map((p, i) =>
         `<tr><td>${i + 1}</td><td>${esc(p.name)}${p === game.hunter ? ' <span class="tag">Hunter</span>' : p.caught ? ' <span class="tag">caught</span>' : ''}</td>` +
         (game.phase === 'results' ? `<td class="num">+${p.roundPts}</td>` : '') + `<td class="num">${p.score}</td></tr>`).join('')
@@ -229,7 +243,7 @@
         `<h2>${game.phase === 'over' ? 'Final scores' : `Round ${game.round} over`}</h2>` +
         (game.phase === 'results' ? `<p class="why">${why}</p>` : '') +
         `<table class="board"><thead><tr><th scope="col">#</th><th scope="col">Player</th>${game.phase === 'results' ? '<th scope="col" class="num">Round</th>' : ''}<th scope="col" class="num">Total</th></tr></thead><tbody>${rows}</tbody></table>` +
-        button + status +
+        button + mapLine + status +
         `<p class="keys">Room ${roomCode}${game.phase === 'results' ? ' · G final scores now' : ''} · Q hides this panel</p>`
     } else {
       const url = net.joinUrl(roomCode)
@@ -246,11 +260,13 @@
         `<p class="url">or go to <strong>${esc(siteAddress())}</strong> and enter</p>` +
         `<p class="code" aria-label="Room code ${roomCode.split('').join(' ')}">${roomCode}</p>` +
         `<h3>${players.size} ${players.size === 1 ? 'player' : 'players'}</h3>${list}` +
-        (inRound ? '' : button) + status +
+        (inRound ? '' : button + mapLine) + status +
         `<p class="keys">Q hides this panel · N starts a new room${joinRoute ? ` · join server: ${joinRoute === 'proxy' ? location.hostname : joinRoute === 'cloud' ? '0.peerjs.com' : 'local test'}` : ''}</p>`
     }
     const btn = document.getElementById('next')
     if (btn) btn.addEventListener('click', nextStep)
+    const mb = document.getElementById('map')
+    if (mb) mb.addEventListener('click', nextMap)
   }
 
   if (!demo) {
@@ -294,12 +310,12 @@
   }
 
   function drawFloor () {
-    ctx.fillStyle = C.floor
-    ctx.strokeStyle = C.wall
+    ctx.fillStyle = map.colours.floor
+    ctx.strokeStyle = map.colours.wall
     ctx.lineWidth = 6
     roundRect(0, 0, sim.W, sim.H, 24)
     ctx.fill(); ctx.stroke()
-    ctx.strokeStyle = C.floorLine
+    ctx.strokeStyle = map.colours.floorLine
     ctx.lineWidth = 1.5
     ctx.beginPath()
     for (let x = 100; x < sim.W; x += 100) { ctx.moveTo(x, 6); ctx.lineTo(x, sim.H - 6) }
@@ -319,59 +335,10 @@
 
   function circle (x, y, r, fill) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill() }
 
-  // Landmarks sit under the blobs (except the tree canopy, drawn after them).
-  function drawLandmark (lm, t) {
-    const { x, y } = lm
-    if (lm.kind === 'fountain') {
-      circle(x, y, 70, C.stone)
-      circle(x, y, 58, C.water)
-      const ripple = 20 + ((t * 14) % 36)
-      ctx.strokeStyle = C.waterLight; ctx.lineWidth = 2; ctx.globalAlpha = 1 - (ripple - 20) / 36
-      ctx.beginPath(); ctx.arc(x, y, ripple, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1
-      circle(x, y, 14, C.stone)
-    } else if (lm.kind === 'lamp') {
-      circle(x, y, 90, C.glow)
-      circle(x, y, 50, C.glow)
-      circle(x, y, 12, C.lampHead)
-      ctx.strokeStyle = C.stone; ctx.lineWidth = 4
-      ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.stroke()
-    } else if (lm.kind === 'bench') {
-      ctx.fillStyle = C.wood
-      roundRect(x - 80, y - 16, 160, 32, 6); ctx.fill()
-      ctx.strokeStyle = C.floor; ctx.lineWidth = 3
-      ctx.beginPath()
-      for (let i = -1; i <= 1; i++) { ctx.moveTo(x - 76, y + i * 9); ctx.lineTo(x + 76, y + i * 9) }
-      ctx.stroke()
-    } else if (lm.kind === 'tree') {
-      circle(x + 8, y + 10, 64, C.shadow)
-      circle(x, y, 18, C.wood)
-    } else if (lm.kind === 'rug') {
-      ctx.fillStyle = C.rugEdge; roundRect(x - 110, y - 70, 220, 140, 10); ctx.fill()
-      ctx.fillStyle = C.rug; roundRect(x - 98, y - 58, 196, 116, 6); ctx.fill()
-      ctx.strokeStyle = C.rugEdge; ctx.lineWidth = 3
-      ctx.beginPath(); ctx.ellipse(x, y, 60, 32, 0, 0, Math.PI * 2); ctx.stroke()
-    }
-  }
-
-  function drawCanopy (lm) {
-    if (lm.kind !== 'tree') return
-    ctx.globalAlpha = 0.88
-    circle(lm.x - 26, lm.y - 14, 42, C.leafDark)
-    circle(lm.x + 24, lm.y - 18, 40, C.leafDark)
-    circle(lm.x, lm.y + 16, 44, C.leafDark)
-    circle(lm.x - 6, lm.y - 8, 40, C.leaf)
-    circle(lm.x + 18, lm.y + 6, 30, C.leaf)
-    ctx.globalAlpha = 1
-  }
-
-  function drawLabel (lm) {
-    const below = { fountain: 96, lamp: 40, bench: 42, tree: 84, rug: 94 }[lm.kind]
-    ctx.font = 'italic 26px Georgia, serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillStyle = C.label
-    ctx.fillText(lm.name, lm.x, lm.y + below)
-  }
+  // Landmarks come from the map (maps.js) and are drawn by art.js.
+  const drawLandmark = (lm, t) => art.draw(ctx, lm, t, map.colours.floor)
+  const drawCanopy = lm => art.canopy(ctx, lm)
+  const drawLabel = lm => art.label(ctx, lm, C.label)
 
   // Every blob is drawn by this one function, whatever it is.
   function drawBlob (b, reveal, alpha) {
@@ -534,8 +501,8 @@
       ctx.textAlign = 'center'
       ctx.textBaseline = 'bottom'
       ctx.fillText(game
-        ? 'Enter start / next · E end round · Space pause · F full screen · Q panel · H hide this line'
-        : 'Space pause · R reveal humans (testing only) · F full screen · H hide this line', cw / 2, ch - 4)
+        ? 'Enter start / next · E end round · M map · Space pause · F full screen · Q panel · H hide this line'
+        : 'Space pause · R reveal humans (testing only) · M map · F full screen · H hide this line', cw / 2, ch - 4)
     }
   }
 
@@ -545,6 +512,7 @@
     if (k === ' ') { paused = !paused; e.preventDefault() }
     else if (k === 'r' && !game) reveal = !reveal   // demo only: in a real game it would be cheating
     else if (k === 'h') showHelp = !showHelp
+    else if (k === 'm') nextMap()
     else if (k === 'q' && lobby) lobby.hidden = !lobby.hidden
     else if (k === 'enter' && game && e.target.tagName !== 'BUTTON') nextStep()
     else if (k === 'e' && game && game.phase === 'round' && confirm('End this round now?')) { game.endRound(); broadcast() }

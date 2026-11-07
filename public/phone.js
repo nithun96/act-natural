@@ -56,7 +56,7 @@
   let lastTouchEnd = 0
   document.addEventListener('touchend', e => {                                  // double tap
     const now = Date.now()
-    if (zoomLocked && now - lastTouchEnd < 350) e.preventDefault()
+    if (zoomLocked && now - lastTouchEnd < 350 && !e.target.closest('button')) e.preventDefault()   // a quick tap on Shoot must still click
     lastTouchEnd = now
   }, { passive: false })
   function lockZoom (on) {
@@ -85,16 +85,16 @@
       net.store.set('name', name)
       net.store.set('room', code)
       wantJoin = true
-      showStatus('Connecting…')
+      showStatus('Connecting… (1 of 3: reaching the join server)')
       connect()
     })
   }
 
-  function showStatus (text) {
+  function showStatus (text, note) {
     screen = null
     app.classList.remove('playing')
     lockZoom(false)
-    app.innerHTML = `<p class="status big" role="status">${esc(text)}</p>`
+    app.innerHTML = `<p class="status big" role="status">${esc(text)}</p>` + (note && note !== text ? `<p class="note">Last try: ${esc(note)}</p>` : '')
   }
 
   // ---- Connection ----
@@ -127,16 +127,32 @@
     }
   }
 
+  // Steps shown on screen while joining, so a stuck phone says where it's stuck.
+  // The direct link (step 3) can hang when a network blocks device-to-device traffic: give up after 15 s.
+  let linkTimer = null
   function openConn () {
     if (conn) conn.close()
-    conn = peer.connect(net.PREFIX + code, { serialization: 'json' })
-    conn.on('open', () => conn.send({ t: 'join', name, token }))
-    conn.on('data', onMessage)
-    conn.on('close', () => { if (wantJoin) retry('Lost the TV. Trying again…') })
+    if (!joined) showStatus('Connecting… (2 of 3: finding the TV)', lastProblem)
+    const c = peer.connect(net.PREFIX + code, { serialization: 'json' })
+    conn = c
+    clearTimeout(linkTimer)
+    // PeerJS says "peer-unavailable" quickly if the TV isn't there; otherwise we're on to the direct link.
+    setTimeout(() => { if (conn === c && !c.open && !joined) showStatus('Connecting… (3 of 3: linking directly to the TV)', lastProblem) }, 1500)
+    linkTimer = setTimeout(() => {
+      if (conn !== c || c.open) return
+      c.close()
+      retry('Couldn\'t link directly to the TV. The Wi‑Fi may block devices talking to each other; try mobile data or another network. Trying again…')
+    }, 15000)
+    c.on('open', () => { clearTimeout(linkTimer); c.send({ t: 'join', name, token }) })
+    c.on('data', onMessage)
+    c.on('error', err => { if (conn === c) retry('Connection problem (' + (err && err.type || 'data channel') + '). Trying again…') })
+    c.on('close', () => { if (conn === c && wantJoin) retry('Lost the TV. Trying again…') })
   }
 
+  let lastProblem = ''   // kept on screen during the next try, so it doesn't flash past
   function retry (text) {
     if (!wantJoin) return
+    lastProblem = text
     showStatus(text)
     joined = false
     clearTimeout(retryTimer)
@@ -152,7 +168,10 @@
     if (msg.t === 'you') {
       everJoined = true
       joined = true
+      lastProblem = ''
       me = Object.assign({}, me, msg, { tasks: Array.isArray(msg.tasks) ? msg.tasks : [], hold: 0 })
+      const { sim, maps } = window.ActNatural
+      if (msg.map && msg.map !== sim.mapId()) { sim.setMap(maps.byId(msg.map)); drawMap(); drawHunt() }
       render()
     } else if (msg.t === 'full') {
       wantJoin = false

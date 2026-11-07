@@ -136,7 +136,17 @@
         if (pts) { p.score += pts; p.roundPts += pts; events.push({ type: 'task', player: p }) }
       }
       if (g.timeLeft <= 0) { g.timeLeft = 0; endRound('time'); events.push({ type: 'end' }) }
+      else if (nothingLeft()) { endRound('all-done'); events.push({ type: 'end' }) }
       return events
+    }
+
+    // Nothing left to play for: the Hunter has no shots left and every hider still in (and
+    // still connected) has finished all three tasks. Then the round ends instead of waiting out the clock.
+    // A phone that has dropped out doesn't hold the round up.
+    function nothingLeft () {
+      if (g.shots > 0) return false
+      const still = hiders().filter(p => !p.caught && p.conn)
+      return still.every(p => p.task && p.task.done >= p.task.tasks.length)
     }
 
     // Removing a bot must not shuffle what the Hunter is looking at mid-aim: keep aliases, drop the gone ones.
@@ -177,6 +187,7 @@
         ev = { type: 'bot' }
       }
       if (hiders().every(q => q.caught)) endRound('all-caught')
+      else if (nothingLeft()) endRound('all-done')
       return ev
     }
 
