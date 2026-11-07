@@ -62,6 +62,18 @@
         at('bl', { id: 'blocks', name: 'The blocks', kind: 'blocks', below: 78 }),
       ],
     },
+    {
+      id: 'alesund',
+      name: 'Ålesund',
+      colours: { floor: '#1B2125', floorLine: '#252C31', wall: '#38424A' },
+      landmarks: [
+        at('centre', { id: 'brosundet', name: 'Brosundet', kind: 'canal', below: 84 }),
+        at('tl', { id: 'steinvagen', name: 'Steinvågen', kind: 'harbour', below: 92 }),
+        at('tr', { id: 'aksla', name: 'Aksla', kind: 'hill', below: 96 }),
+        at('br', { id: 'aspoya', name: 'Aspøya', kind: 'jugend', below: 70 }),
+        at('bl', { id: 'skarbovika', name: 'Skarbøvika', kind: 'cove', below: 108 }),
+      ],
+    },
   ]
 
   const byId = id => MAPS.find(m => m.id === id) || MAPS[0]

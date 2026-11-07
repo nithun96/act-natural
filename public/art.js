@@ -175,6 +175,55 @@
         box(x - 95 + c * 22, y - 50 + r * 21, 13, 12, 1, n < 4 ? '#F0D28C' : '#2E3136')
       }
     },
+
+    // ---- Ålesund ----
+    canal ({ x, y }, t) {                       // Brosundet: a narrow canal between stone quays, boats moored
+      box(x - 140, y - 46, 280, 20, 2, '#5E5A55')
+      box(x - 140, y + 26, 280, 20, 2, '#5E5A55')
+      box(x - 140, y - 26, 280, 52, 0, '#3F6E80')
+      if (!reduceMotion) line([[x - 130, y + Math.sin(t) * 2], [x - 40, y + 4 + Math.sin(t + 1) * 2], [x + 50, y + Math.sin(t + 2) * 2], [x + 130, y + 4]], '#6E9AAB', 2)
+      for (const [bx, c] of [[-80, '#E8DFC8'], [10, '#B5523B'], [90, '#E8DFC8']]) {
+        poly([[x + bx - 24, y - 12], [x + bx + 18, y - 12], [x + bx + 28, y - 2], [x + bx + 18, y + 8], [x + bx - 24, y + 8]], c)
+        box(x + bx - 10, y - 8, 14, 10, 2, '#3A2C20')
+      }
+    },
+    harbour ({ x, y }, t) {                     // Steinvågen: a small cove, a breakwater and sjøhus on the edge
+      ellipse(x + 10, y + 14, 115, 48, '#3F6E80')
+      ripple(x + 30, y + 20, 10, 30, t, '#6E9AAB')
+      line([[x - 100, y + 52], [x + 30, y + 64], [x + 110, y + 50]], '#6F675C', 10)   // breakwater
+      for (const [dx, c] of [[-110, '#A8483A'], [-62, '#C9963F'], [-14, '#A8483A']]) {
+        box(x + dx, y - 54, 40, 34, 2, c)
+        poly([[x + dx - 4, y - 54], [x + dx + 20, y - 74], [x + dx + 44, y - 54]], '#3A2C20')
+        box(x + dx + 14, y - 36, 12, 16, 1, '#2A211A')
+      }
+      poly([[x + 40, y + 8], [x + 72, y + 8], [x + 80, y + 16], [x + 72, y + 24], [x + 40, y + 24]], K.cream)
+    },
+    hill ({ x, y }) {                           // Aksla: a green hill, the stairs up its side, Fjellstua on top
+      ellipse(x, y + 6, 120, 74, '#3E5A36')
+      ellipse(x - 6, y - 2, 92, 56, '#4A6B40')
+      ellipse(x - 10, y - 10, 58, 36, '#5F7F4E')
+      line([[x + 96, y + 52], [x + 70, y + 34], [x + 84, y + 18], [x + 56, y + 4], [x + 66, y - 12], [x + 30, y - 22]], '#C9BDA3', 4)
+      box(x - 34, y - 32, 48, 22, 2, '#E4DDCB')
+      poly([[x - 38, y - 32], [x - 10, y - 46], [x + 18, y - 32]], '#3A3E44')
+    },
+    jugend ({ x, y }) {                         // Aspøya: a row of Art Nouveau facades with turrets
+      const fronts = ['#D8C27A', '#A9C3A0', '#D9967E', '#9FB8CC', '#E4DDCB']
+      fronts.forEach((c, i) => {
+        const fx = x - 125 + i * 50
+        box(fx, y - 30, 46, 64, 2, c)
+        if (i % 2) poly([[fx + 6, y - 30], [fx + 23, y - 62], [fx + 40, y - 30]], '#4A4E55')
+        else { poly([[fx, y - 30], [fx + 23, y - 48], [fx + 46, y - 30]], '#4A4E55'); poly([[fx + 30, y - 30], [fx + 37, y - 60], [fx + 44, y - 30]], '#3A3E44') }
+        for (let r = 0; r < 3; r++) for (let w = 0; w < 2; w++) box(fx + 9 + w * 18, y - 22 + r * 18, 9, 11, 4, '#2E3136')
+      })
+    },
+    cove ({ x, y }, t) {                        // Skarbøvika: a pale beach curving round the sea, rocks at the edge
+      ellipse(x, y + 4, 130, 80, '#D2C29C')
+      ctx.save(); ctx.beginPath(); ctx.ellipse(x, y + 4, 130, 80, 0, 0, Math.PI * 2); ctx.clip()
+      ellipse(x, y - 52, 150, 74, '#3F6E80')
+      if (!reduceMotion) line([[x - 130, y + 18 + Math.sin(t) * 3], [x - 45, y + 24 + Math.sin(t + 1) * 3], [x + 45, y + 24 + Math.sin(t + 2) * 3], [x + 130, y + 18 + Math.sin(t + 3) * 3]], '#B9D6DE', 3)
+      ctx.restore()
+      for (const [dx, dy, r] of [[-100, 30, 14], [-82, 46, 10], [96, 34, 16], [110, 18, 9]]) circle(x + dx, y + dy, r, '#7A7E84')
+    },
   }
 
   const CANOPY = {
