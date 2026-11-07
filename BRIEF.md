@@ -90,7 +90,7 @@ Each step should be playable before the next one starts.
 
 ## Open questions
 
-- Should the Hunter also see the TV? Today they do, and that makes the phone map unnecessary except for aiming. Is that OK?
+- ~~Should the Hunter also see the TV?~~ **Decided 07.11.2026:** everyone watches the TV, including the Hunter. The Hunter's phone map is only for aiming.
 - Should eliminated humans get something to do, such as becoming a ghost that can mark a blob for the Hunter?
 - Name: "Act Natural" or something in Norwegian?
 - Is haryp2309 OK with you borrowing ideas from the repo, and should he be credited on the page?
