@@ -7,7 +7,8 @@
 <title>Act Natural</title>
 <!-- Party game for the AI workshop (Nov 2026), see ACT-NATURAL-BRIEF.md in the repo.
      Not linked from the site. ?host is the TV, ?room=CODE a phone, ?host&demo=6 the TV with no network.
-     vendor/: PeerJS 1.5.5 and qrcode-generator 2.0.4 (both MIT), copied from npm so the CSP can stay script-src 'self'. -->
+     vendor/: PeerJS and qrcode-generator (both MIT) are npm dependencies (versions in package.json); vite.config.js copies them
+     into the build and serves them in `npm run dev`, so the CSP can stay script-src 'self'. -->
 <style>
   :root { color-scheme: dark; --bg: #12110F; --panel: #1F1C18; --line: #3A342C; --text: #E8DFC8; --muted: #B8AE9C; --purple: #B48AE8; }
   * { box-sizing: border-box; }

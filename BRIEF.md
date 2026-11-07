@@ -29,7 +29,7 @@ It will live at `nithun.no/lab/act-natural/`. It won't be linked from the site a
 ## Architecture
 
 - **No build step.** Plain HTML, JS and canvas in `public/lab/act-natural/`, the same pattern as the existing `public/lab/noise.html`. The site's Vite build copies `public/` as is.
-- **Vendored dependencies:** PeerJS (UMD `peerjs.min.js` from the npm package) and a small QR library (e.g. `qrcode-generator`). Copy both into the folder so the CSP stays `script-src 'self'`. *Check that both packages still ship a UMD file.*
+- **Dependencies:** PeerJS (UMD `peerjs.min.js` from the npm package) and a small QR library (`qrcode-generator`). Both are npm dependencies with exact versions in `package.json` (changed from copied files on 07.11.2026); `vite.config.js` copies them into `dist/lab/act-natural/vendor/`, so the CSP stays `script-src 'self'`.
 - **The host page is the server:** `?host` runs the simulation at 60 fps, draws the TV and holds all state. Phones open `?room=CODE`.
 - **Networking:** PeerJS with host id `act-natural-nithun-<CODE>`. The public PeerJS server only introduces devices; data then flows directly over WebRTC.
 - **Messages:**
@@ -92,7 +92,7 @@ Each step should be playable before the next one starts.
 
 ## Testing locally
 
-- Run `python3 -m http.server 8000` in `public/lab/act-natural/`, then open `http://<Mac's IP>:8000/?host` on the Mac and the QR link on phones on the same Wi‑Fi.
+- Run `npm run dev -- --host`, then open `http://<Mac's IP>:5173/lab/act-natural/index.html?host` on the Mac and the QR link on phones on the same Wi‑Fi. (Serving the folder on its own no longer works: the libraries come from `node_modules`.)
 - PeerJS needs internet access for the introductions.
 - The local server sends no CSP, so the CSP will only be tested after deploying.
 
