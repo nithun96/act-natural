@@ -132,6 +132,7 @@
       if (!token || !name) return
       const p = game.join(token, name)
       if (!p) { send(conn, { t: 'full' }); return }
+      if (p.kicked) { send(conn, { t: 'kicked' }); setTimeout(() => conn.close(), 200); return }
       if (p.conn && p.conn !== conn) p.conn.close()
       p.conn = conn
       conn.player = p
@@ -225,6 +226,17 @@
 
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
+  // Remove a player, between rounds only (mid-round the panel shows no names on purpose).
+  const kickButton = p => `<button type="button" class="kick" data-kick="${esc(p.token)}" aria-label="Kick ${esc(p.name)}">Kick</button>`
+  function kickPlayer (token) {
+    const p = players.get(token)
+    if (!p || !confirm(`Remove ${p.name} from this game? They won't be able to join again.`)) return
+    const conn = p.conn
+    if (!game.kick(token)) return
+    if (conn) { send(conn, { t: 'kicked' }); setTimeout(() => conn.close(), 200) }
+    broadcast()
+  }
+
   function renderLobby () {
     if (!lobby) return
     if (!roomCode) {
@@ -238,11 +250,11 @@
       const why = { time: 'Time\'s up.', 'all-caught': 'The Hunter caught everyone.', 'all-done': 'The Hunter used every shot and everyone still in finished their tasks.', stopped: 'Stopped by the host.' }[game.endReason] || ''
       const rows = game.scoreboard().map((p, i) =>
         `<tr><td>${i + 1}</td><td>${esc(p.name)}${p === game.hunter ? ' <span class="tag">Hunter</span>' : p.caught ? ' <span class="tag">caught</span>' : ''}</td>` +
-        (game.phase === 'results' ? `<td class="num">+${p.roundPts}</td>` : '') + `<td class="num">${p.score}</td></tr>`).join('')
+        (game.phase === 'results' ? `<td class="num">+${p.roundPts}</td>` : '') + `<td class="num">${p.score}</td><td>${kickButton(p)}</td></tr>`).join('')
       lobby.innerHTML =
         `<h2>${game.phase === 'over' ? 'Final scores' : `Round ${game.round} over`}</h2>` +
         (game.phase === 'results' ? `<p class="why">${why}</p>` : '') +
-        `<table class="board"><thead><tr><th scope="col">#</th><th scope="col">Player</th>${game.phase === 'results' ? '<th scope="col" class="num">Round</th>' : ''}<th scope="col" class="num">Total</th></tr></thead><tbody>${rows}</tbody></table>` +
+        `<table class="board"><thead><tr><th scope="col">#</th><th scope="col">Player</th>${game.phase === 'results' ? '<th scope="col" class="num">Round</th>' : ''}<th scope="col" class="num">Total</th><th scope="col"><span class="sr">Remove</span></th></tr></thead><tbody>${rows}</tbody></table>` +
         button + mapLine + status +
         `<p class="keys">Room ${roomCode}${game.phase === 'results' ? ' · G final scores now' : ''} · Q hides this panel</p>`
     } else {
@@ -253,7 +265,7 @@
       const inRound = game.phase === 'round'
       // Mid-round the panel shows no names: a list changing as people join or drop could hint at who is who.
       const list = inRound ? '' : '<ul>' + [...players.values()].sort((a, b) => a.order - b.order)
-        .map(p => `<li${p.conn ? '' : ' class="away"'}><span class="nm">${esc(p.name)}${p.conn ? '' : ' (away)'}</span></li>`).join('') + '</ul>'
+        .map(p => `<li${p.conn ? '' : ' class="away"'}><span class="nm">${esc(p.name)}${p.conn ? '' : ' (away)'}</span>${kickButton(p)}</li>`).join('') + '</ul>'
       lobby.innerHTML =
         `<h2>Join on your phone</h2>` +
         `<img class="qr" alt="QR code for ${esc(url)}" src="${qr.createDataURL(8, 2)}">` +
@@ -263,6 +275,7 @@
         (inRound ? '' : button + mapLine) + status +
         `<p class="keys">Q hides this panel · N starts a new room${joinRoute ? ` · join server: ${joinRoute === 'proxy' ? location.hostname : joinRoute === 'cloud' ? '0.peerjs.com' : 'local test'}` : ''}</p>`
     }
+    for (const kb of lobby.querySelectorAll('button[data-kick]')) kb.addEventListener('click', () => kickPlayer(kb.dataset.kick))
     const btn = document.getElementById('next')
     if (btn) btn.addEventListener('click', nextStep)
     const mb = document.getElementById('map')
