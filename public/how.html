@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>How to play Act Natural</title>
+<!-- Rules page for players. Describes the v1 rules in ACT-NATURAL-BRIEF.md; keep the two in step. -->
+<style>
+  :root { color-scheme: dark; --bg: #12110F; --panel: #1F1C18; --line: #3A342C; --text: #E8DFC8; --muted: #B8AE9C; --purple: #B48AE8; --accent: #F0D28C; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: clamp(17px, 1.1vw + 12px, 26px)/1.6 system-ui, sans-serif; }
+  main { max-width: 46em; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font: 400 clamp(36px, 4vw + 16px, 72px)/1.1 Georgia, serif; margin: 0 0 12px; }
+  h1 em { color: var(--purple); }
+  h2 { font: 400 clamp(24px, 1.6vw + 14px, 40px)/1.2 Georgia, serif; margin: 48px 0 12px; }
+  h2 .n { color: var(--accent); font-style: italic; margin-right: 0.3em; }
+  p, li { color: var(--muted); }
+  strong { color: var(--text); font-weight: 600; }
+  .lede { font-size: 1.15em; color: var(--text); }
+  ol, ul { padding-left: 1.3em; }
+  li { margin: 6px 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
+  .card h3 { margin: 0 0 6px; font: 600 1em system-ui, sans-serif; color: var(--text); }
+  .two { display: grid; gap: 16px; }
+  @media (min-width: 760px) { .two { grid-template-columns: 1fr 1fr; } }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); color: var(--muted); }
+  th { color: var(--text); font-weight: 600; }
+  td.pts { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .scene { display: block; width: 100%; height: auto; margin: 24px 0 8px; border-radius: 10px; }
+  .caption { font-size: 0.85em; margin: 0 0 8px; }
+  a { color: var(--purple); }
+  a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .play { display: inline-block; margin-top: 24px; padding: 12px 20px; min-height: 44px; border-radius: 6px; background: var(--text); color: var(--bg); text-decoration: none; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>How to play <em>Act Natural</em></h1>
+  <p class="lede">The TV shows a room full of identical blobs. Most of them are bots, wandering about at random. A few are you and your friends, steering with your phones. One player is the Hunter, who has three shots to find the humans.</p>
+
+  <svg class="scene" viewBox="0 0 800 300" role="img" aria-label="A room with eight identical cream blobs near a fountain, a lamp and a bench. Nothing shows which ones are people.">
+    <rect x="2" y="2" width="796" height="296" rx="14" fill="#1F1C18" stroke="#3A342C" stroke-width="4"/>
+    <circle cx="400" cy="150" r="46" fill="#6E665A"/><circle cx="400" cy="150" r="38" fill="#5E8BA0"/><circle cx="400" cy="150" r="9" fill="#6E665A"/>
+    <circle cx="120" cy="80" r="50" fill="rgba(240,210,140,0.10)"/><circle cx="120" cy="80" r="8" fill="#F0D28C"/>
+    <rect x="610" y="62" width="110" height="22" rx="4" fill="#8A6A4A"/>
+    <g fill="#E8DFC8">
+      <circle cx="180" cy="120" r="14"/><circle cx="250" cy="220" r="14"/><circle cx="330" cy="70" r="14"/><circle cx="470" cy="230" r="14"/>
+      <circle cx="540" cy="110" r="14"/><circle cx="640" cy="200" r="14"/><circle cx="700" cy="120" r="14"/><circle cx="110" cy="240" r="14"/>
+    </g>
+    <g fill="#1C1A17">
+      <circle cx="185" cy="116" r="2.4"/><circle cx="185" cy="124" r="2.4"/><circle cx="246" cy="216" r="2.4"/><circle cx="246" cy="224" r="2.4"/>
+      <circle cx="333" cy="74" r="2.4"/><circle cx="327" cy="74" r="2.4"/><circle cx="475" cy="226" r="2.4"/><circle cx="475" cy="234" r="2.4"/>
+      <circle cx="544" cy="106" r="2.4"/><circle cx="544" cy="114" r="2.4"/><circle cx="636" cy="196" r="2.4"/><circle cx="636" cy="204" r="2.4"/>
+      <circle cx="703" cy="124" r="2.4"/><circle cx="697" cy="124" r="2.4"/><circle cx="114" cy="236" r="2.4"/><circle cx="114" cy="244" r="2.4"/>
+    </g>
+  </svg>
+  <p class="caption">Two of these blobs are people. Which two?</p>
+
+  <h2><span class="n">1</span>Join</h2>
+  <ol>
+    <li>Scan the QR code on the TV with your phone camera, or open the link and type the five-letter room code.</li>
+    <li>Type your name. Your phone is now your controller.</li>
+    <li>Keep your screen to yourself. It shows who you are and what you're doing.</li>
+  </ol>
+
+  <h2><span class="n">2</span>Each round</h2>
+  <p>A round lasts <strong>90 seconds</strong>. One player is the <strong>Hunter</strong>. Everyone else is <strong>hiding</strong> as a blob in the crowd. After each round the next player in join order becomes the Hunter, so a full game is one round per player.</p>
+
+  <div class="two">
+    <div class="card">
+      <h3>If you're hiding</h3>
+      <ul>
+        <li>Drag the joystick on your phone to walk. Every blob walks at the same speed, so you can't hurry.</li>
+        <li>Your phone shows <strong>three landmarks</strong> to visit in order, such as Fountain, then Bench, then Rug.</li>
+        <li>Stand next to a landmark for about <strong>1.5 seconds</strong> to tick it off.</li>
+        <li>Lost your blob? Press and hold the map on your phone to see where you are.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>If you're the Hunter</h3>
+      <ul>
+        <li>You don't have a blob. Watch the TV like everyone else and look for the blob that isn't quite a bot.</li>
+        <li>Your phone shows the same room, for aiming. You have <strong>three shots</strong>: tap a blob to shoot it.</li>
+        <li>Hit a human and they're out for the rest of the round.</li>
+        <li>Hit a bot and the shot is wasted. That bot disappears.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><span class="n">3</span>Act natural</h2>
+  <p>The Hunter is watching for anything a bot wouldn't do. Bots:</p>
+  <ul>
+    <li>walk to a landmark about four times in ten, and to a random spot the rest of the time</li>
+    <li>stop for half a second to three seconds when they arrive, then pick somewhere new</li>
+    <li>drift a little as they walk, and sometimes pause halfway</li>
+  </ul>
+  <p>So don't march straight from task to task, and don't stand still for long. Take a detour now and then. And don't stare at your phone when the Hunter looks at you.</p>
+
+  <h2><span class="n">4</span>Scoring</h2>
+  <table>
+    <thead><tr><th scope="col">What happens</th><th scope="col" class="pts">Points</th></tr></thead>
+    <tbody>
+      <tr><td>You tick off a landmark</td><td class="pts">+1</td></tr>
+      <tr><td>You finish all three landmarks</td><td class="pts">+2 more</td></tr>
+      <tr><td>The Hunter hits a human</td><td class="pts">Hunter +3</td></tr>
+    </tbody>
+  </table>
+  <p>The round ends when time runs out or every human is out. The TV then shows who was who, and the scores.</p>
+
+  <a class="play" href="index.html?host&amp;demo=6">Watch the room (demo)</a>
+</main>
+</body>
+</html>
