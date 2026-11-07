@@ -221,7 +221,7 @@
     const status = netStatus === 'open' ? '' : `<p class="status">${esc(netStatus)}</p>`
     const button = game.nextLabel() ? `<button type="button" class="next" id="next"${game.phase === 'lobby' && !game.canStart() ? ' disabled' : ''}>${esc(game.nextLabel())} <kbd>Enter</kbd></button>` : ''
     if (game.phase === 'results' || game.phase === 'over') {
-      const why = { time: 'Time\'s up.', 'all-caught': 'The Hunter caught everyone.', stopped: 'Stopped by the host.' }[game.endReason] || ''
+      const why = { time: 'Time\'s up.', 'all-caught': 'The Hunter caught everyone.', 'all-done': 'The Hunter used every shot and everyone still in finished their tasks.', stopped: 'Stopped by the host.' }[game.endReason] || ''
       const rows = game.scoreboard().map((p, i) =>
         `<tr><td>${i + 1}</td><td>${esc(p.name)}${p === game.hunter ? ' <span class="tag">Hunter</span>' : p.caught ? ' <span class="tag">caught</span>' : ''}</td>` +
         (game.phase === 'results' ? `<td class="num">+${p.roundPts}</td>` : '') + `<td class="num">${p.score}</td></tr>`).join('')
