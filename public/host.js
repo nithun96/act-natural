@@ -22,9 +22,14 @@
   let netStatus = demo ? 'demo' : 'starting'
   const lobby = demo ? null : buildLobby()
 
-  function startHost () {
-    const code = net.makeCode()
-    const peer = new Peer(net.PREFIX + code, net.peerOptions())
+  // The room code is kept in this browser, so reloading the TV keeps the same room and
+  // phones find their way back without scanning again (idea from mafia-online).
+  let peer = null
+  let takenTries = 0
+  function startHost (code) {
+    code = code || net.store.get('host-code') || net.makeCode()
+    net.store.set('host-code', code)
+    peer = new Peer(net.PREFIX + code, net.peerOptions())
     peer.on('open', () => { roomCode = code; netStatus = 'open'; renderLobby() })   // also fires after a reconnect
     peer.on('connection', conn => conn.on('data', msg => onMessage(conn, msg)))
     peer.on('disconnected', () => {
@@ -33,7 +38,21 @@
       setTimeout(() => { if (!peer.destroyed) peer.reconnect() }, 2000)
     })
     peer.on('error', err => {
-      if (err.type === 'unavailable-id' && !roomCode) { peer.destroy(); startHost(); return }   // code taken: pick another
+      if (err.type === 'unavailable-id' && !roomCode) {
+        // Just after a reload the server can hold the old connection's id for a few seconds.
+        // Keep trying the same code for about 30 s; after that another screen has it, so pick a new one.
+        peer.destroy()
+        takenTries++
+        if (takenTries <= 8) {
+          netStatus = `Reopening room ${code}…`
+          renderLobby()
+          setTimeout(() => startHost(code), 4000)
+        } else {
+          takenTries = 0
+          startHost(net.makeCode())
+        }
+        return
+      }
       if (err.type === 'peer-unavailable') return                                            // a phone left; harmless
       netStatus = err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error'
         ? 'Can\'t reach the PeerJS server. Check this computer\'s internet connection.'
@@ -96,6 +115,11 @@
     return el
   }
 
+  // The short address to type: no https://, no index.html, no trailing slash.
+  function siteAddress () {
+    return (location.host + location.pathname).replace(/index\.html$/, '').replace(/\/$/, '')
+  }
+
   function renderLobby () {
     if (!lobby) return
     const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
@@ -112,14 +136,23 @@
     lobby.innerHTML =
       `<h2>Join on your phone</h2>` +
       `<img class="qr" alt="QR code for ${esc(url)}" src="${qr.createDataURL(8, 2)}">` +
+      `<p class="url">or go to <strong>${esc(siteAddress())}</strong> and enter</p>` +
       `<p class="code" aria-label="Room code ${roomCode.split('').join(' ')}">${roomCode}</p>` +
-      `<p class="url">${esc(url.replace(/^https?:\/\//, ''))}</p>` +
       `<h3>${players.size} ${players.size === 1 ? 'player' : 'players'}</h3><ul>${list}</ul>` +
       (netStatus === 'open' ? '' : `<p class="status">${esc(netStatus)}</p>`) +
-      `<p class="keys">Q hides this panel</p>`
+      `<p class="keys">Q hides this panel · N starts a new room (everyone rejoins)</p>`
   }
 
-  if (!demo) { renderLobby(); startHost() }
+  if (!demo) {
+    renderLobby()
+    startHost()
+    window.addEventListener('pagehide', () => { if (peer) peer.destroy() })   // frees the room id at once
+  }
+
+  function newRoom () {
+    net.store.set('host-code', net.makeCode())
+    location.reload()
+  }
 
   // ---- Canvas, scaled to fit the TV with the room's 16:9 shape kept ----
   const canvas = document.createElement('canvas')
@@ -326,6 +359,7 @@
     else if (k === 'r') reveal = !reveal
     else if (k === 'h') showHelp = !showHelp
     else if (k === 'q' && lobby) lobby.hidden = !lobby.hidden
+    else if (k === 'n' && lobby && confirm('Start a new room? Everyone will need to join again.')) newRoom()
     else if (k === 'f') {
       if (document.fullscreenElement) document.exitFullscreen()
       else document.documentElement.requestFullscreen?.()

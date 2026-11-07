@@ -36,6 +36,7 @@
   let peer = null
   let conn = null
   let joined = false
+  let everJoined = false   // once in, a missing TV means it's reloading: keep trying
   let wantJoin = false
   let retryTimer = null
   let myPos = null
@@ -78,7 +79,7 @@
       peer.on('disconnected', () => { if (!peer.destroyed) peer.reconnect() })
       peer.on('error', err => {
         if (err.type === 'peer-unavailable') {
-          if (joined) retry('Lost the TV. Trying again…')
+          if (everJoined) retry('Lost the TV. Trying again…')
           else showNameForm(`No game with code ${code} is running. Check the code on the TV.`)
           return
         }
@@ -112,6 +113,7 @@
   function onMessage (msg) {
     if (!msg || typeof msg !== 'object') return
     if (msg.t === 'you') {
+      everJoined = true
       if (!joined) { joined = true; showController() }
     } else if (msg.t === 'full') {
       wantJoin = false
