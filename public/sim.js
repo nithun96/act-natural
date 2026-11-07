@@ -13,13 +13,16 @@
   const LANDMARK_CHANCE = 0.4
   const LANDMARK_JITTER = 55      // bots aim for a point near a landmark, not its centre
 
-  const LANDMARKS = [
-    { id: 'fountain', name: 'Fountain', x: 800, y: 450, kind: 'fountain' },
-    { id: 'lamp', name: 'Lamp', x: 260, y: 210, kind: 'lamp' },
-    { id: 'bench', name: 'Bench', x: 1330, y: 190, kind: 'bench' },
-    { id: 'tree', name: 'Tree', x: 1350, y: 700, kind: 'tree' },
-    { id: 'rug', name: 'Rug', x: 300, y: 690, kind: 'rug' },
-  ]
+  // The current map's landmarks (maps.js). The array is changed in place by setMap, so
+  // everything holding it (the world, the phone's map) sees the new map at once.
+  const LANDMARKS = []
+  let mapId = null
+  function setMap (map) {
+    LANDMARKS.length = 0
+    for (const lm of map.landmarks) LANDMARKS.push(lm)
+    mapId = map.id
+  }
+  setMap(window.ActNatural.maps.list[0])
 
   const rand = (a, b) => a + Math.random() * (b - a)
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
@@ -223,6 +226,6 @@
   }
 
   window.ActNatural = Object.assign(window.ActNatural || {}, {
-    sim: { W, H, BLOB_R, SPEED, MARGIN, STICK_DEADZONE, LANDMARKS, createWorld, addHuman, resetRoom, topUpBots, step, TASK_RANGE, TASK_HOLD, dealTasks, stepTask, setInput, makeDriver, pickTarget, nearLandmark, rand },
+    sim: { W, H, BLOB_R, SPEED, MARGIN, STICK_DEADZONE, LANDMARKS, setMap, mapId: () => mapId, createWorld, addHuman, resetRoom, topUpBots, step, TASK_RANGE, TASK_HOLD, dealTasks, stepTask, setInput, makeDriver, pickTarget, nearLandmark, rand },
   })
 })()
