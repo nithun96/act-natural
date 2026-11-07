@@ -21,6 +21,11 @@ It will live at `nithun.no/lab/act-natural/`. It won't be linked from the site a
 - **Hunter:** has no blob. Their phone shows the map, and a tap shoots the nearest blob within the hit radius. Hitting a human gives the Hunter +3 and takes that human out of the round (their blob is greyed out). Hitting a bot wastes the shot, and that bot is revealed and removed.
 - **End of round:** the timer runs out or every human is out. The TV shows who was who and the scores. Then the host presses "Next round".
 
+## Added after the build order (Nov 2026)
+
+- **Maps:** the park, Vietnam (Hoan Kiem Lake, phở stall, Hội An lanterns, rice paddy, motorbike), Jaffna (Nallur Kandaswamy, Casuarina Beach, Jaffna Public Library, palmyra palm, Jaffna Fort) and East Oslo (Stovner senter, Haugenstua T, Stovnertårnet, football pitch, the blocks). The host picks one between rounds (M). Landmark choices were Claude's proposal, not yet confirmed by Nithun.
+- **Early end:** a round also ends when the Hunter has no shots left and every hider still in has finished all three landmarks.
+
 ## Architecture
 
 - **No build step.** Plain HTML, JS and canvas in `public/lab/act-natural/`, the same pattern as the existing `public/lab/noise.html`. The site's Vite build copies `public/` as is.
