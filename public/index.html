@@ -6,19 +6,65 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Act Natural</title>
 <!-- Party game for the AI workshop (Nov 2026), see ACT-NATURAL-BRIEF.md in the repo.
-     Not linked from the site. Step 1: ?host&demo=6 runs the room with no network. -->
+     Not linked from the site. ?host is the TV, ?room=CODE a phone, ?host&demo=6 the TV with no network.
+     vendor/: PeerJS 1.5.5 and qrcode-generator 2.0.4 (both MIT), copied from npm so the CSP can stay script-src 'self'. -->
 <style>
-  :root { color-scheme: dark; }
-  html, body { margin: 0; height: 100%; background: #12110F; color: #E8DFC8; font: 16px/1.5 system-ui, sans-serif; }
-  canvas { display: block; width: 100vw; height: 100vh; }
-  .hint { max-width: 520px; margin: 0 auto; padding: 32px 20px; }
-  .hint h1 { font: 400 32px/1.2 Georgia, serif; margin: 0 0 12px; }
-  .hint a { color: #C9A9F0; }
-  .hint code { background: #2A2620; padding: 2px 6px; border-radius: 3px; }
+  :root { color-scheme: dark; --bg: #12110F; --panel: #1F1C18; --line: #3A342C; --text: #E8DFC8; --muted: #B8AE9C; --purple: #B48AE8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
+  canvas { display: block; }
+  body > canvas { width: 100vw; height: 100vh; }
+  a { color: var(--purple); }
+  :focus-visible { outline: 3px solid #F0D28C; outline-offset: 3px; }
+
+  /* TV: join panel */
+  .lobby { position: fixed; top: 4vh; right: 2vw; width: clamp(220px, 20vw, 420px); padding: 1.2vw; background: rgba(18,17,15,0.92); border: 1px solid var(--line); border-radius: 12px; font-size: clamp(14px, 1vw, 22px); }
+  .lobby h2 { font: 400 1.6em/1.2 Georgia, serif; margin: 0 0 0.5em; }
+  .lobby h3 { font-size: 1em; margin: 1em 0 0.3em; color: var(--muted); font-weight: 600; }
+  .lobby .qr { display: block; width: 100%; height: auto; border-radius: 6px; image-rendering: pixelated; }
+  .lobby .code { font: 600 2.6em/1 ui-monospace, Menlo, monospace; letter-spacing: 0.15em; text-align: center; margin: 0.4em 0 0.1em; }
+  .lobby .url { color: var(--muted); font-size: 0.8em; text-align: center; word-break: break-all; margin: 0; }
+  .lobby ul { list-style: none; padding: 0; margin: 0; columns: 2; }
+  .lobby li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lobby li.away { color: #7A7266; }
+  .lobby .keys, .lobby .status { color: var(--muted); font-size: 0.8em; margin: 1em 0 0; }
+  .lobby[hidden] { display: none; }
+
+  /* Phone */
+  .phone { max-width: 480px; margin: 0 auto; padding: 32px 16px; }
+  .phone h1 { font: 400 40px/1.15 Georgia, serif; margin: 0 0 12px; }
+  .phone h1 em { color: var(--purple); }
+  .phone p { color: var(--muted); }
+  .mono { font-family: ui-monospace, Menlo, monospace; letter-spacing: 0.1em; }
+  .stack { display: grid; gap: 10px; margin: 24px 0; }
+  .stack label { color: var(--text); }
+  input { font: inherit; font-size: 20px; padding: 12px; min-height: 48px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+  #code { font-family: ui-monospace, Menlo, monospace; letter-spacing: 0.2em; text-transform: uppercase; }
+  button { font: inherit; font-weight: 600; min-height: 48px; padding: 12px 18px; border: 0; border-radius: 6px; background: var(--text); color: var(--bg); cursor: pointer; }
+  .note { color: #F0B08C !important; }
+  .status.big { font-size: 22px; text-align: center; margin-top: 30vh; }
+  .links { margin-top: 32px; }
+
+  /* Phone: controller fills the screen */
+  .phone.playing { max-width: none; padding: 0; }
+  .pad { position: fixed; inset: 0 0 72px 0; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; display: grid; place-items: center; }
+  .padhint { color: #7A7266; font-size: 18px; pointer-events: none; }
+  .base { position: fixed; width: 128px; height: 128px; margin: -64px 0 0 -64px; border-radius: 50%; border: 2px solid var(--line); background: rgba(232,223,200,0.04); pointer-events: none; }
+  .base[hidden] { display: none; }
+  .knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; border-radius: 50%; background: var(--muted); transform: translate(-50%, -50%); }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px env(safe-area-inset-bottom); border-top: 1px solid var(--line); background: var(--bg); }
+  .hold { background: var(--panel); color: var(--text); border: 1px solid var(--line); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .rtt { color: #7A7266; font-variant-numeric: tabular-nums; font-size: 14px; }
+  .map { position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%); width: min(92vw, 420px); height: auto; aspect-ratio: 16 / 9; border-radius: 8px; pointer-events: none; }
+  .map[hidden] { display: none; }
 </style>
 </head>
 <body>
+<script src="vendor/peerjs.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="net.js"></script>
 <script src="sim.js"></script>
 <script src="host.js"></script>
+<script src="phone.js"></script>
 </body>
 </html>

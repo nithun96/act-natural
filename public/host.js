@@ -1,22 +1,125 @@
-// Act Natural: the TV page. ?host&demo=6 runs the room with 6 fake humans and no network.
+// Act Natural: the TV page.
+//   ?host          the real game: phones join over the network and steer their blobs
+//   ?host&demo=6   no network: 6 fake humans steered by the same virtual thumb as the bots
 (function () {
   'use strict'
-  const { sim } = window.ActNatural
-  const params = new URLSearchParams(location.search)
+  const { sim, net } = window.ActNatural
+  const params = net.params
+  if (!params.has('host')) return   // phone.js handles every other address
 
-  if (!params.has('host')) {
-    // Phones join here from step 2 on. For now, point at the demo.
-    document.body.innerHTML = '<main class="hint"><h1>Act Natural</h1>' +
-      '<p>Nothing to join yet. The TV demo runs at <a href="?host&amp;demo=6"><code>?host&amp;demo=6</code></a>. <a href="how.html">How to play</a>.</p></main>'
-    return
-  }
-
+  const demo = params.has('demo')
   const demoHumans = Math.max(0, Math.min(20, parseInt(params.get('demo') || '0', 10) || 0))
   const world = sim.createWorld({ humans: demoHumans })
 
   // ---- Fake humans: the same virtual thumb as the bots, through the human joystick path ----
   const fakes = world.blobs.filter(b => b.kind === 'human')
   for (const b of fakes) b.driver = sim.makeDriver()
+
+  // ---- Network: the TV is the server. Players are kept by token so a reloaded phone gets its blob back ----
+  const MAX_PLAYERS = 20
+  const players = new Map()          // token -> { token, name, blob, conn, order }
+  let roomCode = null
+  let netStatus = demo ? 'demo' : 'starting'
+  const lobby = demo ? null : buildLobby()
+
+  function startHost () {
+    const code = net.makeCode()
+    const peer = new Peer(net.PREFIX + code, net.peerOptions())
+    peer.on('open', () => { roomCode = code; netStatus = 'open'; renderLobby() })   // also fires after a reconnect
+    peer.on('connection', conn => conn.on('data', msg => onMessage(conn, msg)))
+    peer.on('disconnected', () => {
+      netStatus = 'Lost contact with the PeerJS server (needed only for new phones to join). Trying again…'
+      renderLobby()
+      setTimeout(() => { if (!peer.destroyed) peer.reconnect() }, 2000)
+    })
+    peer.on('error', err => {
+      if (err.type === 'unavailable-id' && !roomCode) { peer.destroy(); startHost(); return }   // code taken: pick another
+      if (err.type === 'peer-unavailable') return                                            // a phone left; harmless
+      netStatus = err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error'
+        ? 'Can\'t reach the PeerJS server. Check this computer\'s internet connection.'
+        : 'Network problem: ' + err.type
+      renderLobby()
+    })
+  }
+
+  function send (conn, msg) {
+    if (conn && conn.open) { try { conn.send(msg) } catch (e) { /* closing */ } }
+  }
+
+  function onMessage (conn, msg) {
+    if (!msg || typeof msg !== 'object') return
+    if (msg.t === 'ping') { send(conn, { t: 'pong', id: msg.id }); return }
+    if (msg.t === 'join') {
+      const token = String(msg.token || '').slice(0, 64)
+      const name = String(msg.name || '').trim().replace(/\s+/g, ' ').slice(0, 20)
+      if (!token || !name) return
+      let p = players.get(token)
+      if (!p) {
+        if (players.size >= MAX_PLAYERS) { send(conn, { t: 'full' }); return }
+        p = { token, name, blob: sim.addHuman(world), conn: null, order: players.size }
+        players.set(token, p)
+      }
+      if (p.conn && p.conn !== conn) p.conn.close()
+      p.name = name
+      p.conn = conn
+      conn.player = p
+      conn.on('close', () => { if (p.conn === conn) { p.conn = null; sim.setInput(p.blob, 0, 0); renderLobby() } })
+      send(conn, { t: 'you', role: 'hider', phase: 'lobby', name: p.name })
+      renderLobby()
+      return
+    }
+    const p = conn.player
+    if (!p) return
+    if (msg.t === 'in') {
+      const dx = Number(msg.dx), dy = Number(msg.dy)
+      if (!isFinite(dx) || !isFinite(dy)) return
+      const m = Math.hypot(dx, dy)
+      sim.setInput(p.blob, m > 1 ? dx / m : dx, m > 1 ? dy / m : dy)
+    }
+  }
+
+  // Each phone hears only where its own blob is (for its hold-to-see map), 10 times a second.
+  if (!demo) {
+    setInterval(() => {
+      for (const p of players.values()) {
+        send(p.conn, { t: 'pos', x: Math.round(p.blob.x / sim.W * 1000) / 1000, y: Math.round(p.blob.y / sim.H * 1000) / 1000 })
+      }
+    }, 1000 / net.POS_HZ)
+  }
+
+  // ---- Lobby panel: QR code, room code and who has joined (names are never drawn in the room) ----
+  function buildLobby () {
+    const el = document.createElement('aside')
+    el.className = 'lobby'
+    el.setAttribute('aria-live', 'polite')
+    document.body.appendChild(el)
+    return el
+  }
+
+  function renderLobby () {
+    if (!lobby) return
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+    if (!roomCode) {
+      lobby.innerHTML = `<p class="status">${netStatus === 'starting' ? 'Opening the room…' : esc(netStatus)}</p>`
+      return
+    }
+    const url = net.joinUrl(roomCode)
+    const qr = qrcode(0, 'M')
+    qr.addData(url)
+    qr.make()
+    const list = [...players.values()].sort((a, b) => a.order - b.order)
+      .map(p => `<li${p.conn ? '' : ' class="away"'}>${esc(p.name)}${p.conn ? '' : ' (away)'}</li>`).join('')
+    lobby.innerHTML =
+      `<h2>Join on your phone</h2>` +
+      `<img class="qr" alt="QR code for ${esc(url)}" src="${qr.createDataURL(8, 2)}">` +
+      `<p class="code" aria-label="Room code ${roomCode.split('').join(' ')}">${roomCode}</p>` +
+      `<p class="url">${esc(url.replace(/^https?:\/\//, ''))}</p>` +
+      `<h3>${players.size} ${players.size === 1 ? 'player' : 'players'}</h3><ul>${list}</ul>` +
+      (netStatus === 'open' ? '' : `<p class="status">${esc(netStatus)}</p>`) +
+      `<p class="keys">Q hides this panel</p>`
+  }
+
+  if (!demo) { renderLobby(); startHost() }
 
   // ---- Canvas, scaled to fit the TV with the room's 16:9 shape kept ----
   const canvas = document.createElement('canvas')
@@ -203,15 +306,16 @@
     ctx.fillStyle = C.hud
     ctx.textBaseline = 'top'
     ctx.textAlign = 'left'
-    const humans = fakes.length
+    const humans = demo ? fakes.length : players.size
     const bots = world.blobs.length - humans
-    ctx.fillText(`Act Natural · demo · ${humans} fake humans, ${bots} bots${paused ? ' · paused' : ''}${reveal ? ' · REVEALED' : ''}`, ox + 8, Math.max(4, oy - fs - 4))
+    const what = demo ? `demo · ${humans} fake humans` : `room ${roomCode || '…'} · ${humans} ${humans === 1 ? 'player' : 'players'}`
+    ctx.fillText(`Act Natural · ${what}, ${bots} bots${paused ? ' · paused' : ''}${reveal ? ' · REVEALED' : ''}`, ox + 8, Math.max(4, oy - fs - 4))
     ctx.textAlign = 'right'
     ctx.fillText(`${Math.round(fps)} fps`, ox + sim.W * s - 8, Math.max(4, oy - fs - 4))
     if (showHelp) {
       ctx.textAlign = 'center'
       ctx.textBaseline = 'bottom'
-      ctx.fillText('Space pause · R reveal humans (testing only) · F full screen · H hide this line', cw / 2, ch - 4)
+      ctx.fillText(`Space pause · R reveal humans (testing only) · F full screen${lobby ? ' · Q join panel' : ''} · H hide this line`, cw / 2, ch - 4)
     }
   }
 
@@ -221,11 +325,13 @@
     if (k === ' ') { paused = !paused; e.preventDefault() }
     else if (k === 'r') reveal = !reveal
     else if (k === 'h') showHelp = !showHelp
+    else if (k === 'q' && lobby) lobby.hidden = !lobby.hidden
     else if (k === 'f') {
       if (document.fullscreenElement) document.exitFullscreen()
       else document.documentElement.requestFullscreen?.()
     }
   })
 
+  window.__actNatural = { world, players }   // for automated tests
   requestAnimationFrame(frame)
 })()
