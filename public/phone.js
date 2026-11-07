@@ -66,6 +66,7 @@
 
   // ---- Screens ----
   function showNameForm (note) {
+    screen = null
     app.classList.remove('playing')
     lockZoom(false)
     app.innerHTML =
@@ -89,6 +90,7 @@
   }
 
   function showStatus (text) {
+    screen = null
     app.classList.remove('playing')
     lockZoom(false)
     app.innerHTML = `<p class="status big" role="status">${esc(text)}</p>`
@@ -138,18 +140,27 @@
     if (!msg || typeof msg !== 'object') return
     if (msg.t === 'you') {
       everJoined = true
-      me = { tasks: Array.isArray(msg.tasks) ? msg.tasks : [], done: msg.done | 0, score: msg.score | 0, hold: 0 }
-      if (!joined) { joined = true; showController() } else renderTasks()
-      drawMap()
+      joined = true
+      me = Object.assign({}, me, msg, { tasks: Array.isArray(msg.tasks) ? msg.tasks : [], hold: 0 })
+      render()
     } else if (msg.t === 'full') {
       wantJoin = false
       showNameForm('This game is full (20 players).')
     } else if (msg.t === 'pos') {
       myPos = { x: msg.x, y: msg.y }
       me.hold = Number(msg.hold) || 0
+      if (msg.tl != null) { me.timeLeft = msg.tl; updateClock() }
       const bar = document.getElementById('holdbar')
       if (bar) bar.style.width = Math.round(me.hold * 100) + '%'
       drawMap()
+    } else if (msg.t === 'all') {
+      hunt = msg
+      me.timeLeft = msg.tl
+      updateClock()
+      if (sel != null && !msg.b.some(([a, , , st]) => a === sel && st === 0)) setSel(null)
+      drawHunt()
+    } else if (msg.t === 'event') {
+      toast(msg.kind === 'caught' ? `Caught ${msg.name}! +3` : 'That was a bot. Shot wasted.')
     } else if (msg.t === 'pong') {
       const sent = pings.get(msg.id)
       if (sent) { pings.delete(msg.id); rtt = rtt == null ? performance.now() - sent : rtt * 0.7 + (performance.now() - sent) * 0.3 }
@@ -169,17 +180,52 @@
     if (el && rtt != null) el.textContent = Math.round(rtt) + ' ms'
   }, 1000)
 
+  // ---- Screens by game phase: controller (lobby and hiding), Hunter, caught, results ----
+  let screen = null
+  let me = { tasks: [], done: 0, score: 0, hold: 0, phase: 'lobby', role: 'hider' }   // from the TV
+  function render () {
+    const kind = me.phase === 'round' && me.role === 'hunter' ? 'hunter'
+      : me.phase === 'round' && me.caught ? 'caught'
+        : me.phase === 'results' || me.phase === 'over' ? 'results'
+          : 'controller'
+    if (kind !== screen) {
+      if (stick.active) release()
+      screen = kind
+      lockZoom(true)
+      mapEl = null
+      hmapEl = null
+      ;({ controller: showController, hunter: showHunter, caught: showCaught, results: showResults })[kind]()
+    } else if (kind === 'controller') { renderTasks(); renderStatus() } else if (kind === 'hunter') { renderHunter() } else if (kind === 'results') { showResults() } else { renderStatus() }
+  }
+
+  const clock = t => `${Math.floor(t / 60)}:${String(Math.max(0, t) % 60).padStart(2, '0')}`
+  function renderStatus () {
+    const el = document.getElementById('statusline')
+    if (!el) return
+    if (me.phase === 'round') {
+      el.innerHTML = `<span>Round ${me.round} · ${me.role === 'hunter' ? 'You\'re the Hunter' : 'Hunter: ' + esc(me.hunter || '')}</span><span class="clock" id="clock"></span>`
+      updateClock()
+    } else {
+      el.innerHTML = '<span>Warm-up: find your blob. Waiting for the host to start.</span>'
+    }
+  }
+  function updateClock () {
+    const el = document.getElementById('clock')
+    if (!el || me.timeLeft == null) return
+    el.textContent = clock(me.timeLeft)
+    el.classList.toggle('low', me.timeLeft <= 10)
+  }
+
   // ---- Controller: map on top, your tasks, and the joystick area below ----
   let stick = { dx: 0, dy: 0, active: false }
   let mapEl = null
-  let me = { tasks: [], done: 0, score: 0, hold: 0 }   // from the TV
   const LM = () => window.ActNatural.sim.LANDMARKS
   const lmName = id => (LM().find(l => l.id === id) || { name: id }).name
 
   function showController () {
     app.classList.add('playing')
-    lockZoom(true)
     app.innerHTML =
+      '<p class="status-line" id="statusline"></p>' +
       '<canvas class="map" id="map" aria-hidden="true"></canvas>' +
       '<section class="tasks" aria-live="polite">' +
       '<ol id="tasklist"></ol>' +
@@ -195,6 +241,7 @@
     mapEl = document.getElementById('map')
     sizeMap()
     renderTasks()
+    renderStatus()
     const R = 64
     let origin = null
     let pid = null
@@ -237,7 +284,8 @@
   function renderTasks () {
     const ol = document.getElementById('tasklist')
     if (!ol) return
-    if (!me.tasks.length) { ol.innerHTML = '<li class="next">Waiting for tasks…</li>'; return }
+    document.getElementById('score').textContent = me.score
+    if (!me.tasks.length) { ol.innerHTML = '<li class="next">Your three landmarks appear when the round starts.</li>'; return }
     ol.innerHTML = me.tasks.map((id, i) => {
       const state = i < me.done ? 'done' : i === me.done ? 'next' : 'later'
       const label = state === 'done' ? ' (done)' : state === 'next' ? ' (next)' : ''
@@ -248,12 +296,15 @@
   }
 
   function sizeMap () {
-    if (!mapEl) return
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
-    const r = mapEl.getBoundingClientRect()
-    mapEl.width = Math.round(r.width * dpr)
-    mapEl.height = Math.round(r.height * dpr)
+    for (const el of [mapEl, hmapEl]) {
+      if (!el) continue
+      const r = el.getBoundingClientRect()
+      el.width = Math.round(r.width * dpr)
+      el.height = Math.round(r.height * dpr)
+    }
     drawMap()
+    drawHunt()
   }
   window.addEventListener('resize', sizeMap)
 
@@ -328,6 +379,152 @@
       c.fillStyle = '#B48AE8'; c.fill()
       c.strokeStyle = '#E8DFC8'; c.lineWidth = 2.5 * k; c.stroke()
     }
+  }
+
+  // ---- Hunter: the whole room on the phone. Tap a blob to aim (a crosshair shows on the TV), then Shoot ----
+  let hmapEl = null
+  let hunt = null      // { b: [[alias, x, y, state]], tl, aim } — state 0 in play, 1 caught, 2 shot bot
+  let sel = null
+
+  function showHunter () {
+    app.classList.add('playing')
+    sel = null
+    app.innerHTML =
+      '<p class="status-line" id="statusline"></p>' +
+      '<canvas class="map hunt" id="hmap" role="img" aria-label="Map of every blob. Tap one to aim. Arrow keys also choose."></canvas>' +
+      '<div class="hunter-bar">' +
+      '<p class="shots" id="shots"></p>' +
+      '<button type="button" class="shoot" id="shoot" disabled>Shoot</button>' +
+      '<p class="toast" id="toast" role="status"></p>' +
+      '<p class="hint">Watch the TV. Tap a blob here to aim; everyone sees the crosshair. Arrow keys and Enter work too.</p>' +
+      '</div>'
+    hmapEl = document.getElementById('hmap')
+    sizeMap()
+    renderHunter()
+    hmapEl.addEventListener('pointerdown', e => {
+      e.preventDefault()
+      if (!hunt) return
+      const r = hmapEl.getBoundingClientRect()
+      const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height
+      let best = null, bestD = Infinity
+      for (const [a, bx, by, st] of hunt.b) {
+        if (st !== 0) continue
+        const d = Math.hypot((bx - x) * r.width, (by - y) * r.height)
+        if (d < bestD) { bestD = d; best = a }
+      }
+      setSel(bestD <= 36 ? best : null)
+    })
+    document.getElementById('shoot').addEventListener('click', shoot)
+  }
+
+  function setSel (a) {
+    sel = a
+    send({ t: 'aim', a })
+    const btn = document.getElementById('shoot')
+    if (btn) btn.disabled = sel == null || !me.shots
+    drawHunt()
+  }
+
+  function shoot () {
+    if (sel == null || !me.shots) return
+    send({ t: 'shoot', a: sel })
+    sel = null
+    const btn = document.getElementById('shoot')
+    if (btn) btn.disabled = true
+  }
+
+  function renderHunter () {
+    renderStatus()
+    const el = document.getElementById('shots')
+    if (el) {
+      const n = me.shots || 0
+      el.innerHTML = `<span aria-hidden="true">${'●'.repeat(n)}${'○'.repeat(Math.max(0, 3 - n))}</span> ${n} ${n === 1 ? 'shot' : 'shots'} left`
+    }
+    const btn = document.getElementById('shoot')
+    if (btn) btn.disabled = sel == null || !me.shots
+  }
+
+  let toastTimer = null
+  function toast (text) {
+    const el = document.getElementById('toast')
+    if (!el) return
+    el.textContent = text
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => { el.textContent = '' }, 3000)
+  }
+
+  // Keyboard for the Hunter: arrows step through blobs left to right, Enter or Space shoots.
+  window.addEventListener('keydown', e => {
+    if (screen !== 'hunter' || !hunt) return
+    const k = e.key
+    if (k === 'Enter' || k === ' ') { e.preventDefault(); shoot(); return }
+    if (k !== 'ArrowLeft' && k !== 'ArrowRight' && k !== 'ArrowUp' && k !== 'ArrowDown') return
+    e.preventDefault()
+    const live = hunt.b.filter(b => b[3] === 0).sort((p, q) => p[1] - q[1] || p[2] - q[2])
+    if (!live.length) return
+    const i = live.findIndex(b => b[0] === sel)
+    const step = k === 'ArrowLeft' || k === 'ArrowUp' ? -1 : 1
+    setSel(live[(i + step + live.length) % live.length][0])
+  })
+
+  function drawHunt () {
+    if (!hmapEl || !hmapEl.width) return
+    const c = hmapEl.getContext('2d')
+    const w = hmapEl.width, h = hmapEl.height
+    const k = w / 400
+    c.fillStyle = '#1F1C18'; c.fillRect(0, 0, w, h)
+    c.strokeStyle = '#3A342C'; c.lineWidth = 3 * k; c.strokeRect(1.5 * k, 1.5 * k, w - 3 * k, h - 3 * k)
+    c.textAlign = 'center'; c.textBaseline = 'top'
+    c.font = `${10 * k}px system-ui, sans-serif`
+    c.fillStyle = '#7A7266'
+    for (const lm of LM()) c.fillText(lm.name, lm.x / 1600 * w, lm.y / 900 * h + 4 * k)
+    if (!hunt) return
+    const R = 4.5 * k
+    for (const [a, bx, by, st] of hunt.b) {
+      const x = bx * w, y = by * h
+      if (st === 0) {
+        c.fillStyle = '#E8DFC8'
+        c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fill()
+      } else {                                // caught or shot: hollow with a cross
+        c.strokeStyle = '#7A7266'; c.lineWidth = 1.5 * k
+        c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.stroke()
+        c.beginPath(); c.moveTo(x - R, y - R); c.lineTo(x + R, y + R); c.moveTo(x + R, y - R); c.lineTo(x - R, y + R); c.stroke()
+      }
+      if (a === sel) {                        // crosshair
+        c.strokeStyle = '#F0D28C'; c.lineWidth = 2 * k
+        c.beginPath(); c.arc(x, y, R * 2.4, 0, Math.PI * 2); c.stroke()
+        c.beginPath()
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { c.moveTo(x + dx * R * 1.6, y + dy * R * 1.6); c.lineTo(x + dx * R * 3.4, y + dy * R * 3.4) }
+        c.stroke()
+      }
+    }
+  }
+
+  // ---- Caught: out until the round ends ----
+  function showCaught () {
+    app.classList.remove('playing')
+    app.innerHTML =
+      '<section class="card" role="status">' +
+      '<p class="xeyes" aria-hidden="true">× ×</p>' +
+      '<h2>Caught!</h2>' +
+      `<p>You're out until the round ends. Your points stay: <strong>${me.score}</strong>.</p>` +
+      '<p class="status-line" id="statusline"></p>' +
+      '</section>'
+    renderStatus()
+  }
+
+  // ---- Results: after each round, and the final scores ----
+  function showResults () {
+    app.classList.remove('playing')
+    const over = me.phase === 'over'
+    const what = me.role === 'hunter' ? 'You were the Hunter.' : me.caught ? 'You were caught.' : 'You made it to the end.'
+    app.innerHTML =
+      '<section class="card" role="status">' +
+      `<h2>${over ? 'Final scores' : `Round ${me.round} over`}</h2>` +
+      (over ? '' : `<p>${what} <strong>+${me.roundPts}</strong> this round.</p>`) +
+      `<p class="big">${me.score}</p><p>points · place ${me.rank} of ${me.players}</p>` +
+      `<p>${over ? 'Thanks for playing!' : me.last ? 'That was the last round. Final scores next.' : 'Watch the TV to see who was who. The next round starts soon.'}</p>` +
+      '</section>'
   }
 
   // Keep the screen on while playing.

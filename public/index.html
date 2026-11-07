@@ -72,6 +72,40 @@
   .lobby li { display: flex; justify-content: space-between; gap: 8px; padding-right: 12px; }
   .lobby .nm { overflow: hidden; text-overflow: ellipsis; }
   .lobby .pts { color: #F0D28C; font-variant-numeric: tabular-nums; }
+
+  /* TV: round controls and scoreboard */
+  .lobby .next { display: flex; width: 100%; justify-content: center; align-items: center; gap: 10px; margin-top: 1em; font-size: 1.1em; }
+  .lobby .next[disabled] { opacity: 0.5; cursor: default; }
+  kbd { font: 600 0.75em ui-monospace, Menlo, monospace; padding: 2px 6px; border-radius: 4px; border: 1px solid currentColor; opacity: 0.8; }
+  .lobby .why { color: var(--muted); margin: 0 0 0.6em; }
+  .board { width: 100%; border-collapse: collapse; }
+  .board th, .board td { text-align: left; padding: 0.3em 0.3em; border-bottom: 1px solid var(--line); }
+  .board th { color: var(--muted); font-weight: 600; font-size: 0.85em; }
+  .board .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .board tbody tr:first-child td { font-weight: 700; }
+  .tag { font-size: 0.75em; padding: 1px 6px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); }
+
+  /* Phone: round status line */
+  .status-line { flex: none; width: 100%; max-width: 560px; margin: 0 auto; display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 15px; }
+  .status-line .clock { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .status-line .clock.low { color: #F0D28C; }
+  .status-line .clock.low::before { content: "⏱ "; }
+
+  /* Phone: Hunter */
+  .map.hunt { touch-action: none; cursor: crosshair; max-width: none; width: min(100%, calc((100vh - 250px) * 16 / 9)); }
+  .hunter-bar .hint { color: #7A7266 !important; font-size: 14px; }
+  .hunter-bar { flex: none; width: 100%; max-width: 560px; margin: 0 auto; display: grid; gap: 10px; }
+  .hunter-bar p { margin: 0; }
+  .hunter-bar .shots { font-size: 22px; color: var(--text); letter-spacing: 0.1em; }
+  .shoot { font-size: 22px; min-height: 64px; width: 100%; }
+  .shoot[disabled] { opacity: 0.45; }
+  .toast { color: var(--text) !important; font-weight: 600; min-height: 1.5em; }
+
+  /* Phone: caught, results */
+  .card { max-width: 480px; margin: 0 auto; padding: 24px 4px; text-align: center; }
+  .card h2 { font: 400 34px/1.15 Georgia, serif; margin: 0 0 12px; }
+  .card .big { font: 700 56px/1 system-ui, sans-serif; color: var(--text); margin: 8px 0; font-variant-numeric: tabular-nums; }
+  .card .xeyes { font-size: 44px; margin: 0; }
 </style>
 </head>
 <body>
@@ -79,6 +113,7 @@
 <script src="vendor/qrcode.js"></script>
 <script src="net.js"></script>
 <script src="sim.js"></script>
+<script src="round.js"></script>
 <script src="host.js"></script>
 <script src="phone.js"></script>
 </body>
