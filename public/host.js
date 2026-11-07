@@ -75,7 +75,7 @@
       let p = players.get(token)
       if (!p) {
         if (players.size >= MAX_PLAYERS) { send(conn, { t: 'full' }); return }
-        p = { token, name, blob: sim.addHuman(world), conn: null, order: players.size }
+        p = { token, name, blob: sim.addHuman(world), conn: null, order: players.size, score: 0, task: sim.dealTasks() }
         players.set(token, p)
       }
       if (p.conn && p.conn !== conn) p.conn.close()
@@ -83,7 +83,7 @@
       p.conn = conn
       conn.player = p
       conn.on('close', () => { if (p.conn === conn) { p.conn = null; sim.setInput(p.blob, 0, 0); renderLobby() } })
-      send(conn, { t: 'you', role: 'hider', phase: 'lobby', name: p.name })
+      sendYou(p)
       renderLobby()
       return
     }
@@ -97,11 +97,28 @@
     }
   }
 
+  function sendYou (p) {
+    send(p.conn, { t: 'you', role: 'hider', phase: 'lobby', name: p.name, tasks: p.task.tasks, done: p.task.done, score: p.score })
+  }
+
+  // Tasks run with the simulation. A tick-off goes to that phone at once; the TV list updates too.
+  function stepTasks (dt) {
+    for (const p of players.values()) {
+      const pts = sim.stepTask(p.task, p.blob, dt)
+      if (pts) { p.score += pts; sendYou(p); renderLobby() }
+    }
+  }
+
+  function newTasks () {
+    for (const p of players.values()) { p.task = sim.dealTasks(); sendYou(p) }
+    renderLobby()
+  }
+
   // Each phone hears only where its own blob is (for its hold-to-see map), 10 times a second.
   if (!demo) {
     setInterval(() => {
       for (const p of players.values()) {
-        send(p.conn, { t: 'pos', x: Math.round(p.blob.x / sim.W * 1000) / 1000, y: Math.round(p.blob.y / sim.H * 1000) / 1000 })
+        send(p.conn, { t: 'pos', x: Math.round(p.blob.x / sim.W * 1000) / 1000, y: Math.round(p.blob.y / sim.H * 1000) / 1000, hold: Math.round(p.task.hold / sim.TASK_HOLD * 100) / 100 })
       }
     }, 1000 / net.POS_HZ)
   }
@@ -132,7 +149,7 @@
     qr.addData(url)
     qr.make()
     const list = [...players.values()].sort((a, b) => a.order - b.order)
-      .map(p => `<li${p.conn ? '' : ' class="away"'}>${esc(p.name)}${p.conn ? '' : ' (away)'}</li>`).join('')
+      .map(p => `<li${p.conn ? '' : ' class="away"'}><span class="nm">${esc(p.name)}${p.conn ? '' : ' (away)'}</span><span class="pts">${p.score}</span></li>`).join('')
     lobby.innerHTML =
       `<h2>Join on your phone</h2>` +
       `<img class="qr" alt="QR code for ${esc(url)}" src="${qr.createDataURL(8, 2)}">` +
@@ -140,7 +157,7 @@
       `<p class="code" aria-label="Room code ${roomCode.split('').join(' ')}">${roomCode}</p>` +
       `<h3>${players.size} ${players.size === 1 ? 'player' : 'players'}</h3><ul>${list}</ul>` +
       (netStatus === 'open' ? '' : `<p class="status">${esc(netStatus)}</p>`) +
-      `<p class="keys">Q hides this panel · N starts a new room (everyone rejoins)</p>`
+      `<p class="keys">Q hides this panel · T deals new tasks · N starts a new room</p>`
   }
 
   if (!demo) {
@@ -311,7 +328,7 @@
     if (fpsClock >= 0.5) { fps = fpsFrames / fpsClock; fpsFrames = 0; fpsClock = 0 }
     if (!paused) {
       acc += dt
-      while (acc >= STEP) { sim.step(world, STEP); acc -= STEP }
+      while (acc >= STEP) { sim.step(world, STEP); stepTasks(STEP); acc -= STEP }
     }
     draw()
     requestAnimationFrame(frame)
@@ -359,6 +376,7 @@
     else if (k === 'r') reveal = !reveal
     else if (k === 'h') showHelp = !showHelp
     else if (k === 'q' && lobby) lobby.hidden = !lobby.hidden
+    else if (k === 't' && lobby) newTasks()
     else if (k === 'n' && lobby && confirm('Start a new room? Everyone will need to join again.')) newRoom()
     else if (k === 'f') {
       if (document.fullscreenElement) document.exitFullscreen()
