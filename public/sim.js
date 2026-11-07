@@ -43,7 +43,7 @@
   function makeBlob (id, kind) {
     const p = randomPoint()
     return {
-      id, kind,                     // kind: 'bot' | 'human'
+      id, kind,                     // id is a plain number, so it never gives the kind away
       x: p.x, y: p.y, px: p.x, py: p.y, vx: 0, vy: 0,
       facing: Math.random() * Math.PI * 2,
       walkPhase: Math.random() * 10,
@@ -54,17 +54,34 @@
     }
   }
 
-  function createWorld ({ humans = 0 } = {}) {
-    const bots = Math.max(16, humans * 2)
-    const blobs = []
-    for (let i = 0; i < bots; i++) { const b = makeBlob('b' + i, 'bot'); b.driver = makeDriver(); blobs.push(b) }
-    for (let i = 0; i < humans; i++) blobs.push(makeBlob('h' + i, 'human'))
-    // Shuffle so draw order (and therefore overlap) gives nothing away.
-    for (let i = blobs.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [blobs[i], blobs[j]] = [blobs[j], blobs[i]]
+  function insertRandom (blobs, b) {
+    blobs.splice(Math.floor(Math.random() * (blobs.length + 1)), 0, b)
+  }
+
+  // Keep max(16, humans × 2) bots. Bots are only ever added, never taken away mid-game.
+  function topUpBots (world) {
+    const humans = world.blobs.filter(b => b.kind === 'human').length
+    let bots = world.blobs.length - humans
+    while (bots < Math.max(16, humans * 2)) {
+      const b = makeBlob(world.nextId++, 'bot')
+      b.driver = makeDriver()
+      insertRandom(world.blobs, b)
+      bots++
     }
-    return { w: W, h: H, time: 0, blobs, landmarks: LANDMARKS }
+  }
+
+  function addHuman (world) {
+    const b = makeBlob(world.nextId++, 'human')
+    insertRandom(world.blobs, b)
+    topUpBots(world)
+    return b
+  }
+
+  function createWorld ({ humans = 0 } = {}) {
+    const world = { w: W, h: H, time: 0, blobs: [], landmarks: LANDMARKS, nextId: 0 }
+    for (let i = 0; i < humans; i++) addHuman(world)
+    topUpBots(world)
+    return world
   }
 
   // A human's joystick: direction only. Above the deadzone they move at exactly bot speed.
@@ -164,6 +181,6 @@
   }
 
   window.ActNatural = Object.assign(window.ActNatural || {}, {
-    sim: { W, H, BLOB_R, SPEED, MARGIN, STICK_DEADZONE, LANDMARKS, createWorld, step, setInput, makeDriver, pickTarget, nearLandmark, rand },
+    sim: { W, H, BLOB_R, SPEED, MARGIN, STICK_DEADZONE, LANDMARKS, createWorld, addHuman, step, setInput, makeDriver, pickTarget, nearLandmark, rand },
   })
 })()
