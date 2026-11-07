@@ -26,25 +26,33 @@
   // phones find their way back without scanning again (idea from mafia-online).
   let peer = null
   let takenTries = 0
+  // Introductions go through nithun.no first and PeerJS's own server second (net.ROUTES).
+  // A route that can't be reached before the room opens moves on to the next one.
+  let routeI = 0
+  let routeWraps = 0
   function startHost (code) {
     code = code || net.store.get('host-code') || net.makeCode()
     net.store.set('host-code', code)
-    peer = new Peer(net.PREFIX + code, net.peerOptions())
-    peer.on('open', () => { roomCode = code; setNet('open') })   // also fires after a reconnect
-    peer.on('connection', conn => conn.on('data', msg => onMessage(conn, msg)))
+    const route = net.ROUTES[routeI]
+    const p = new Peer(net.PREFIX + code, net.peerOptions(route))
+    peer = p
+    p.on('open', () => { if (p !== peer) return; roomCode = code; joinRoute = route; routeWraps = 0; setNet('open') })   // also after a reconnect
+    p.on('connection', conn => conn.on('data', msg => onMessage(conn, msg)))
     // Losing the PeerJS server only stops new phones joining; phones already in talk to the TV
     // directly and keep playing. Retry quickly, then less often, for as long as it takes.
-    peer.on('disconnected', () => {
+    p.on('disconnected', () => {
+      if (p !== peer || !roomCode) return
       setNet('down')
       clearTimeout(reconnectTimer)
       reconnectTimer = setTimeout(reconnect, Math.min(1000 * 2 ** reconnectTries, 15000))
       reconnectTries++
     })
-    peer.on('error', err => {
+    p.on('error', err => {
+      if (p !== peer) return
       if (err.type === 'unavailable-id' && !roomCode) {
         // Just after a reload the server can hold the old connection's id for a few seconds.
         // Keep trying the same code for about 30 s; after that another screen has it, so pick a new one.
-        peer.destroy()
+        p.destroy()
         takenTries++
         if (takenTries <= 8) {
           netStatus = `Reopening room ${code}…`
@@ -57,11 +65,23 @@
         return
       }
       if (err.type === 'peer-unavailable') return                                            // a phone left; harmless
-      if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) { setNet('down'); return }
+      if (net.UNREACHABLE.includes(err.type)) {
+        if (!roomCode) {                                   // never got in on this route: try the next
+          p.destroy()
+          routeI = (routeI + 1) % net.ROUTES.length
+          if (routeI === 0) routeWraps++
+          setNet('down')
+          setTimeout(() => startHost(code), routeWraps ? Math.min(2000 * routeWraps, 15000) : 0)
+          return
+        }
+        setNet('down')
+        return
+      }
       netStatus = 'Network problem: ' + err.type
       renderLobby()
     })
   }
+  let joinRoute = null
 
   let reconnectTimer = null
   let reconnectTries = 0
@@ -86,7 +106,9 @@
       if (!downSince) return
       netStatus = navigator.onLine === false
         ? 'This computer is offline. New phones can\'t join until it\'s back; players already in can keep playing.'
-        : 'Reconnecting to the join server… Players already in can keep playing; new phones can join once it\'s back.'
+        : !roomCode
+          ? `Can't reach a join server yet (tried ${location.hostname} and 0.peerjs.com). Still trying… If this doesn't clear, this network may block it: try another computer.`
+          : 'Reconnecting to the join server… Players already in can keep playing; new phones can join once it\'s back.'
       renderLobby()
     }, Math.max(0, 5000 - (Date.now() - downSince)))
   }
@@ -225,7 +247,7 @@
         `<p class="code" aria-label="Room code ${roomCode.split('').join(' ')}">${roomCode}</p>` +
         `<h3>${players.size} ${players.size === 1 ? 'player' : 'players'}</h3>${list}` +
         (inRound ? '' : button) + status +
-        `<p class="keys">Q hides this panel · N starts a new room</p>`
+        `<p class="keys">Q hides this panel · N starts a new room${joinRoute ? ` · join server: ${joinRoute === 'proxy' ? location.hostname : joinRoute === 'cloud' ? '0.peerjs.com' : 'local test'}` : ''}</p>`
     }
     const btn = document.getElementById('next')
     if (btn) btn.addEventListener('click', nextStep)

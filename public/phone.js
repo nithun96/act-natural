@@ -38,6 +38,7 @@
   let joined = false
   let everJoined = false   // once in, a missing TV means it's reloading: keep trying
   let wantJoin = false
+  let routeI = 0
   let retryTimer = null
   let myPos = null
   let rtt = null
@@ -100,10 +101,20 @@
   function connect () {
     clearTimeout(retryTimer)
     if (!peer || peer.destroyed) {
-      peer = new Peer(net.peerOptions())
-      peer.on('open', openConn)
-      peer.on('disconnected', () => { if (!peer.destroyed) peer.reconnect() })
-      peer.on('error', err => {
+      // Introductions through nithun.no first, PeerJS's own server second (net.ROUTES).
+      const p = new Peer(net.peerOptions(net.ROUTES[routeI]))
+      peer = p
+      p.on('open', () => { if (p === peer) { p.everOpen = true; openConn() } })
+      p.on('disconnected', () => { if (p === peer && p.everOpen && !p.destroyed) p.reconnect() })
+      p.on('error', err => {
+        if (p !== peer) return
+        if (net.UNREACHABLE.includes(err.type) && !p.everOpen) {   // this route is blocked or down: try the next
+          p.destroy()
+          routeI = (routeI + 1) % net.ROUTES.length
+          if (routeI === 0) { retry('Can\'t reach the join server. Trying again…'); return }
+          connect()
+          return
+        }
         if (err.type === 'peer-unavailable') {
           if (everJoined) retry('Lost the TV. Trying again…')
           else showNameForm(`No game with code ${code} is running. Check the code on the TV.`)
