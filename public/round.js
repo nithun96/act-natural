@@ -17,6 +17,7 @@
       players: new Map(),       // token → player
       hunter: null,
       hunted: new Set(),        // tokens that have been the Hunter this game
+      kicked: new Set(),        // tokens the host removed; they can't join again this session
       timeLeft: 0,
       shots: 0,
       aliases: new Map(),       // alias → blob, shuffled each round so the Hunter's ids say nothing
@@ -31,6 +32,7 @@
     const ROUNDLESS = new Set(['lobby', 'over'])
 
     g.join = (token, name) => {
+      if (g.kicked.has(token)) return { kicked: true }
       let p = g.players.get(token)
       if (!p) {
         if (g.players.size >= MAX_PLAYERS) return null
@@ -43,6 +45,19 @@
     }
 
     g.canStart = () => online().length >= 2
+
+    // The host removes a player (between rounds only). Their blob leaves the room and the
+    // phone can't join again until the TV page is reloaded.
+    g.kick = (token) => {
+      const p = g.players.get(token)
+      if (!p || g.phase === 'round') return null
+      g.players.delete(token)
+      g.hunted.delete(token)
+      g.kicked.add(token)
+      world.blobs = world.blobs.filter(b => b !== p.blob)
+      if (g.hunter === p) g.hunter = null
+      return p
+    }
 
     // Hunters go in join order: the first player who hasn't hunted yet this game.
     g.startRound = () => {

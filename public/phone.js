@@ -137,9 +137,9 @@
     conn = c
     clearTimeout(linkTimer)
     // PeerJS says "peer-unavailable" quickly if the TV isn't there; otherwise we're on to the direct link.
-    setTimeout(() => { if (conn === c && !c.open && !joined) showStatus('Connecting… (3 of 3: linking directly to the TV)', lastProblem) }, 1500)
+    setTimeout(() => { if (wantJoin && conn === c && !c.open && !joined) showStatus('Connecting… (3 of 3: linking directly to the TV)', lastProblem) }, 1500)
     linkTimer = setTimeout(() => {
-      if (conn !== c || c.open) return
+      if (!wantJoin || conn !== c || c.open) return
       c.close()
       retry('Couldn\'t link directly to the TV. The Wi‑Fi may block devices talking to each other; try mobile data or another network. Trying again…')
     }, 15000)
@@ -173,6 +173,8 @@
       const { sim, maps } = window.ActNatural
       if (msg.map && msg.map !== sim.mapId()) { sim.setMap(maps.byId(msg.map)); drawMap(); drawHunt() }
       render()
+    } else if (msg.t === 'kicked') {
+      showKicked()
     } else if (msg.t === 'full') {
       wantJoin = false
       showNameForm('This game is full (20 players).')
@@ -531,6 +533,20 @@
   }
 
   // ---- Caught: out until the round ends ----
+  // Removed by the host: stop trying, and don't rejoin by itself after a reload.
+  function showKicked () {
+    wantJoin = false
+    joined = false
+    clearTimeout(retryTimer)
+    clearTimeout(linkTimer)
+    conn = null                          // timers from the last connection attempt check this
+    net.store.set('room', '')
+    screen = 'kicked'
+    app.classList.remove('playing')
+    lockZoom(false)
+    app.innerHTML = '<section class="card" role="status"><h2>Removed</h2><p>You were removed from this game by the host.</p></section>'
+  }
+
   function showCaught () {
     app.classList.remove('playing')
     app.innerHTML =
