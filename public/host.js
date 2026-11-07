@@ -306,6 +306,13 @@
     circle(ex + px, ey + py, R * 0.16, C.eye)
     circle(ex - px, ey - py, R * 0.16, C.eye)
     ctx.restore()
+    // Colour is never the only cue: a revealed human also gets a ring and a marker above it.
+    if (isHuman) {
+      ctx.beginPath(); ctx.arc(x, y, R + 6, 0, Math.PI * 2)
+      ctx.strokeStyle = C.blob; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); ctx.stroke(); ctx.setLineDash([])
+      ctx.beginPath(); ctx.moveTo(x - 9, y - R - 22); ctx.lineTo(x + 9, y - R - 22); ctx.lineTo(x, y - R - 10); ctx.closePath()
+      ctx.fillStyle = C.blob; ctx.fill()
+    }
   }
 
   // ---- Loop: fixed 60 Hz simulation, drawn on every animation frame ----

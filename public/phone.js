@@ -241,7 +241,7 @@
     ol.innerHTML = me.tasks.map((id, i) => {
       const state = i < me.done ? 'done' : i === me.done ? 'next' : 'later'
       const label = state === 'done' ? ' (done)' : state === 'next' ? ' (next)' : ''
-      return `<li class="${state}"><span class="tick" aria-hidden="true">${state === 'done' ? '✓' : i + 1}</span>${esc(lmName(id))}<span class="sr">${label}</span>` +
+      return `<li class="${state}"><span class="tick" aria-hidden="true">${state === 'done' ? '✓' : state === 'next' ? '→' : i + 1}</span>${esc(lmName(id))}<span class="sr">${label}</span>` +
         (state === 'next' ? '<span class="bar" aria-hidden="true"><span id="holdbar"></span></span>' : '') + '</li>'
     }).join('') + (me.done >= me.tasks.length ? '<li class="alldone">All three done: +2 bonus</li>' : '')
     document.getElementById('score').textContent = me.score
@@ -319,11 +319,14 @@
       }
       c.fillStyle = lm.id === next ? '#F0D28C' : '#B8AE9C'
       c.beginPath(); c.arc(x, y, 3.5 * k, 0, Math.PI * 2); c.fill()
+      c.font = `${lm.id === next ? 'bold ' : ''}${11 * k}px system-ui, sans-serif`   // next: ring and bold, not just colour
       c.fillText(lm.name, x, y + 6 * k)
     }
     if (myPos) {
-      c.fillStyle = '#B48AE8'
-      c.beginPath(); c.arc(myPos.x * w, myPos.y * h, 7 * k, 0, Math.PI * 2); c.fill()
+      // Your dot: bigger than the landmark dots and outlined, so it stands out without colour.
+      c.beginPath(); c.arc(myPos.x * w, myPos.y * h, 7 * k, 0, Math.PI * 2)
+      c.fillStyle = '#B48AE8'; c.fill()
+      c.strokeStyle = '#E8DFC8'; c.lineWidth = 2.5 * k; c.stroke()
     }
   }
 

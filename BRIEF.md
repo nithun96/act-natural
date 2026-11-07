@@ -79,6 +79,7 @@ Each step should be playable before the next one starts.
 5. **Deploy** using the Nginx block above, then test on 4G as well as Wi‑Fi.
 
 **Non-functional requirements:**
+- Colour-blind friendly: colour is never the only cue. Anything that tells players apart or marks a state (revealed, eliminated, next task, your own dot) also differs in shape, outline, text or position (decided 07.11.2026).
 - Works on iOS Safari 15+ and Chrome on Android.
 - No accounts, analytics or server-side code.
 - The phone screen must never reveal who you are to someone looking over your shoulder.
