@@ -165,9 +165,24 @@
     b.vy = inp.dy / mag * SPEED
   }
 
+  // Start of a round: bots shot last round are gone, everyone gets a fresh random spot (so
+  // nobody can follow their blob over from the last round), and bots are topped up again.
+  function resetRoom (world) {
+    world.blobs = world.blobs.filter(b => !b.gone)
+    for (const b of world.blobs) {
+      const p = randomPoint()
+      b.x = b.px = p.x; b.y = b.py = p.y; b.vx = b.vy = 0
+      b.out = false; b.hidden = false
+      if (b.driver) b.driver = makeDriver()
+      setInput(b, 0, 0)
+    }
+    topUpBots(world)
+  }
+
   function step (world, dt) {
     world.time += dt
     for (const b of world.blobs) {
+      if (b.hidden) continue
       b.px = b.x; b.py = b.y        // for smooth drawing between steps
       if (b.driver) drive(b, dt)
       stepHuman(b, dt)
@@ -208,6 +223,6 @@
   }
 
   window.ActNatural = Object.assign(window.ActNatural || {}, {
-    sim: { W, H, BLOB_R, SPEED, MARGIN, STICK_DEADZONE, LANDMARKS, createWorld, addHuman, step, TASK_RANGE, TASK_HOLD, dealTasks, stepTask, setInput, makeDriver, pickTarget, nearLandmark, rand },
+    sim: { W, H, BLOB_R, SPEED, MARGIN, STICK_DEADZONE, LANDMARKS, createWorld, addHuman, resetRoom, topUpBots, step, TASK_RANGE, TASK_HOLD, dealTasks, stepTask, setInput, makeDriver, pickTarget, nearLandmark, rand },
   })
 })()
