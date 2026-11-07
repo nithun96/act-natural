@@ -7,7 +7,7 @@
   if (!params.has('host')) {
     // Phones join here from step 2 on. For now, point at the demo.
     document.body.innerHTML = '<main class="hint"><h1>Act Natural</h1>' +
-      '<p>Nothing to join yet. The TV demo runs at <a href="?host&amp;demo=6"><code>?host&amp;demo=6</code></a>.</p></main>'
+      '<p>Nothing to join yet. The TV demo runs at <a href="?host&amp;demo=6"><code>?host&amp;demo=6</code></a>. <a href="how.html">How to play</a>.</p></main>'
     return
   }
 
