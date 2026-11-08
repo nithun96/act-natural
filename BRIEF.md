@@ -1,5 +1,7 @@
 # Act Natural: brief for Claude Code
 
+> **History note (08.11.2026):** this is the original brief, written while the game lived in the nithun-website repo at `nithun.no/lab/act-natural/`. Paths and file names below are from then. The game now lives in this repo and at `play.nithun.no/act-natural/`; see `README.md` for the current set-up and `ROADMAP.md` for what's next.
+
 Status: draft brief, 07.11.2026. Nothing below has been built yet.
 
 ## What and why

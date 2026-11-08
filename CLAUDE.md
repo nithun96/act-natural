@@ -1,6 +1,6 @@
 # CLAUDE.md – Act Natural
 
-Read `README.md` (how it's built and deployed) and `BRIEF.md` (rules, decisions, open questions) first.
+Read `README.md` (how it's built and deployed), `BRIEF.md` (rules, decisions, open questions) and `ROADMAP.md` (what's next) first.
 
 - **British English** everywhere: UI text, docs, commits, PRs.
 - **Colour is never the only cue.** Anything that marks a state (revealed, caught, netted, next task, your own dot, suspects) also differs in shape, outline, text or position.
@@ -10,3 +10,4 @@ Read `README.md` (how it's built and deployed) and `BRIEF.md` (rules, decisions,
 - **Keep `npm run build` passing**, and run `npm test` for changes to rules, rounds or the phone/TV screens.
 - **When editing `public/art.js`, screenshot every map**, not just the one you changed (`?host&demo=6&map=park|vietnam|jaffna|stovner|alesund`): an earlier change deleted another map's drawings unnoticed.
 - No hardcoded secrets; the relay login is made at build time from `TURN_SECRET`.
+- **The game lives at `play.nithun.no/act-natural/`, not the domain root.** Keep every path relative to the page (as `net.js` and `relay.js` do), so it works under any prefix.

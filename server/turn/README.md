@@ -113,10 +113,10 @@ If the server has a firewall in the Hetzner Cloud Console (Firewalls, in the lef
 9. Test it. The logins change with every deploy, so read the current ones from the site:
 
 ```bash
-curl -s https://nithun.no/lab/act-natural/turn.js
+curl -s https://play.nithun.no/act-natural/turn.js
 ```
 
-Open https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/, add the server `turn:nithun.no:3478` with that username and credential, and press **Gather candidates**. A line of type `relay` means it works.
+Open https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/, add the server `turn:play.nithun.no:3478` with that username and credential, and press **Gather candidates**. A line of type `relay` means it works.
 
 10. To switch it off:
 

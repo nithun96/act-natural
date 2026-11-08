@@ -24,9 +24,9 @@
   const encoder = new TextEncoder()
   const decoder = new TextDecoder()
 
-  // Our own broker: Mosquitto on the nithun.no server, reached through Nginx on port 443 at
-  // /lab/act-natural/mqtt (server/mqtt/README.md). In `npm run dev`, Vite forwards that path
-  // to nithun.no. ?broker=ws://localhost:9001 uses another one, for testing.
+  // Our own broker: Mosquitto on the server, reached through Nginx on port 443 at
+  // play.nithun.no/act-natural/mqtt (server/mqtt/README.md). `npm run dev` has no proxy for it:
+  // ?broker=ws://localhost:9001 uses another one, for testing.
   // (mafia-online uses three free public brokers; they throttled the game's 15 messages a
   // second to a few, with seconds of delay, so this game has its own.)
   function brokers () {
