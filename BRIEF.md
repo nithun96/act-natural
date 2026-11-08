@@ -6,7 +6,7 @@ Status: draft brief, 07.11.2026. Nothing below has been built yet.
 
 A party game for an AI workshop where 6–20 people play together (12 right now). The TV shows the shared screen, driven by a Mac over HDMI (AirPlay adds too much delay). Everyone's phone is their controller and holds their secrets. It's inspired by how the team's Mafia game works ([haryp2309/mafia-online](https://github.com/haryp2309/mafia-online)), but this game is played in real time.
 
-**The pitch:** the TV shows a room full of identical blobs, and most of them are bots wandering around at random. Each human controls one blob from their phone and has to finish secret tasks without moving like a human. One player is the Hunter, who has 3 shots to pick out the humans.
+**The pitch:** the TV shows a room full of identical blobs, and most of them are bots wandering around at random. Each human controls one blob from their phone and has to finish secret tasks without moving like a human. One player is the Hunter, who shoots to pick out the humans: one shot to start, another every 20 s (up to three), a 5 s lock after hitting a bot, and up to three suspects marked on the TV (changed 08.11.2026 from 3 shots per round).
 
 It will live at `nithun.no/lab/act-natural/`. It won't be linked from the site and will be marked noindex.
 
@@ -24,7 +24,7 @@ It will live at `nithun.no/lab/act-natural/`. It won't be linked from the site a
 ## Added after the build order (Nov 2026)
 
 - **Maps:** the park, Vietnam (Hoan Kiem Lake, phở stall, Hội An lanterns, rice paddy, motorbike), Jaffna (Nallur Kandaswamy, Casuarina Beach, Jaffna Public Library, palmyra palm, Jaffna Fort) East Oslo (Stovner senter, Haugenstua T, Stovnertårnet, Rommen Hindu Temple, Haugenstua Lampa) and Ålesund (Brosundet, Steinvågen, Aksla, Aspøya, Skarbøvika). The host picks one between rounds (M). Landmark choices were Claude's proposal, not yet confirmed by Nithun.
-- **Early end:** a round also ends when the Hunter has no shots left and every hider still in has finished all three landmarks.
+- **Early end:** a round also ends when every hider still in has finished all three landmarks (since 08.11.2026; before, the Hunter also had to be out of shots).
 
 ## Architecture
 

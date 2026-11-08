@@ -189,6 +189,11 @@
     const p = conn.player
     if (!p) return
     if (msg.t === 'aim') { game.aimAt(p, Number(msg.a)); return }
+    if (msg.t === 'mark') {
+      const r = game.mark(p, Number(msg.a))
+      if (r && !r.ok) send(p.conn, { t: 'event', kind: 'marks-full' })
+      return
+    }
     if (msg.t === 'shoot') {
       const ev = game.shoot(p, Number(msg.a))
       if (!ev) return
@@ -229,6 +234,7 @@
   function onEvents (events) {
     for (const ev of events) {
       if (ev.type === 'task') sendYou(ev.player)
+      else if (ev.type === 'hunter') { if (game.hunter) sendYou(game.hunter) }
       else if (ev.type === 'end') broadcast()
     }
   }
@@ -294,7 +300,7 @@
     const mapLine = game.phase === 'round' ? '' : `<p class="mapline">Map: <strong>${esc(map.name)}</strong> <button type="button" class="quiet" id="map">Change map <kbd>M</kbd></button></p>`
     const button = game.nextLabel() ? `<button type="button" class="next" id="next"${game.phase === 'lobby' && !game.canStart() ? ' disabled' : ''}>${esc(game.nextLabel())} <kbd>Enter</kbd></button>` : ''
     if (game.phase === 'results' || game.phase === 'over') {
-      const why = { time: 'Time\'s up.', 'all-caught': 'The Hunter caught everyone.', 'all-done': 'The Hunter used every shot and everyone still in finished their tasks.', stopped: 'Stopped by the host.' }[game.endReason] || ''
+      const why = { time: 'Time\'s up.', 'all-caught': 'The Hunter caught everyone.', 'all-done': 'Everyone still in finished their landmarks.', stopped: 'Stopped by the host.' }[game.endReason] || ''
       const rows = game.scoreboard().map((p, i) =>
         `<tr><td>${i + 1}</td><td>${esc(p.name)}${p === game.hunter ? ' <span class="tag">Hunter</span>' : p.caught ? ' <span class="tag">caught</span>' : ''}</td>` +
         (game.phase === 'results' ? `<td class="num">+${p.roundPts}</td>` : '') + `<td class="num">${p.score}</td><td>${kickButton(p)}</td></tr>`).join('')
@@ -470,6 +476,16 @@
     ctx.stroke()
   }
 
+  // A suspect the Hunter has marked: a thin ring and a numbered tag, so the room can follow.
+  function drawMark (b, n, alpha) {
+    const x = b.px + (b.x - b.px) * alpha
+    const y = b.py + (b.y - b.py) * alpha
+    ctx.strokeStyle = C.blob; ctx.lineWidth = 2; ctx.setLineDash([4, 4])
+    ctx.beginPath(); ctx.arc(x, y, sim.BLOB_R + 7, 0, Math.PI * 2); ctx.stroke()
+    ctx.setLineDash([])
+    tag(x, y - sim.BLOB_R - 22, `Suspect ${n}`)
+  }
+
   // A shot: a ring that spreads out, and what it hit.
   function drawShot (shot) {
     const age = world.time - shot.at
@@ -523,6 +539,7 @@
     for (const lm of world.landmarks) drawCanopy(lm)
     for (const lm of world.landmarks) drawLabel(lm)
     if (game) {
+      if (game.phase === 'round') for (const [b, n] of game.marks) if (!b.hidden) drawMark(b, n, alpha)
       if (game.aim && game.phase === 'round') drawAim(game.aim, alpha)
       if (game.phase === 'round') for (const shot of game.shotsFired) drawShot(shot)   // after the round, the name tags take over
       // End of round: everyone sees who was who.
@@ -546,12 +563,14 @@
       // Round bar: big enough to read from the sofa.
       const t = Math.ceil(game.timeLeft)
       const clock = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`
-      const shots = '●'.repeat(game.shots) + '○'.repeat(round.SHOTS - game.shots)
+      const shots = '●'.repeat(game.shots) + '○'.repeat(round.MAX_SHOTS - game.shots)
+      const shotState = game.lockLeft > 0 ? ` · locked ${Math.ceil(game.lockLeft)} s`
+        : game.shots < round.MAX_SHOTS ? ` · next in ${Math.ceil(round.SHOT_RECHARGE - game.recharge)} s` : ''
       const big = Math.max(18, Math.round(ch * 0.034))
       ctx.font = `600 ${big}px system-ui, sans-serif`
       ctx.textAlign = 'center'
       ctx.fillStyle = C.blob
-      const text = `Round ${game.round} · Hunter: ${game.hunter ? game.hunter.name : ''} · ${clock} · ${shots} ${game.shots} ${game.shots === 1 ? 'shot' : 'shots'} left`
+      const text = `Round ${game.round} · Hunter: ${game.hunter ? game.hunter.name : ''} · ${clock} · ${shots} ${game.shots} ${game.shots === 1 ? 'shot' : 'shots'}${shotState}`
       const w = ctx.measureText(text).width + big * 1.2
       ctx.fillStyle = 'rgba(18,17,15,0.85)'
       ctx.fillRect(cw / 2 - w / 2, oy + 10, w, big * 1.6)

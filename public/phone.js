@@ -330,11 +330,15 @@
     } else if (msg.t === 'all') {
       hunt = msg
       me.timeLeft = msg.tl
+      if (msg.shots != null) me.shots = msg.shots
       updateClock()
       if (sel != null && !msg.b.some(([a, , , st]) => a === sel && st === 0)) setSel(null)
+      renderHunter()
       drawHunt()
     } else if (msg.t === 'event') {
-      toast(msg.kind === 'caught' ? `Caught ${msg.name}! +3` : 'That was a bot. Shot wasted.')
+      toast(msg.kind === 'caught' ? `Caught ${msg.name}! +3`
+        : msg.kind === 'marks-full' ? 'You can mark 3 suspects at most. Unmark one first.'
+          : 'That was a bot. Shooting is locked for 5 s.')
     } else if (msg.t === 'pong') {
       const sent = pings.get(msg.id)
       if (sent) { pings.delete(msg.id); rtt = rtt == null ? performance.now() - sent : rtt * 0.7 + (performance.now() - sent) * 0.3 }
@@ -572,9 +576,13 @@
       '<canvas class="map hunt" id="hmap" role="img" aria-label="Map of every blob. Tap one to aim. Arrow keys also choose."></canvas>' +
       '<div class="hunter-bar">' +
       '<p class="shots" id="shots"></p>' +
+      '<div class="recharge" aria-hidden="true"><span id="rechargebar"></span></div>' +
+      '<div class="hunt-buttons">' +
       '<button type="button" class="shoot" id="shoot" disabled>Shoot</button>' +
+      '<button type="button" class="quiet mark" id="mark" disabled>Mark</button>' +
+      '</div>' +
       '<p class="toast" id="toast" role="status"></p>' +
-      '<p class="hint">Watch the TV. Tap a blob here to aim; everyone sees the crosshair. Arrow keys and Enter work too.</p>' +
+      '<p class="hint">Watch the TV. Tap a blob here to aim; everyone sees the crosshair. Mark up to 3 suspects to keep track of them. Arrow keys, Enter (shoot) and M (mark) work too.</p>' +
       '</div>'
     hmapEl = document.getElementById('hmap')
     sizeMap()
@@ -593,18 +601,25 @@
       setSel(bestD <= 36 ? best : null)
     })
     document.getElementById('shoot').addEventListener('click', shoot)
+    document.getElementById('mark').addEventListener('click', markSel)
+  }
+
+  const markOf = a => { const m = hunt && hunt.marks && hunt.marks.find(([x]) => x === a); return m ? m[1] : null }
+
+  function markSel () {
+    if (sel == null) return
+    send({ t: 'mark', a: sel })
   }
 
   function setSel (a) {
     sel = a
     send({ t: 'aim', a })
-    const btn = document.getElementById('shoot')
-    if (btn) btn.disabled = sel == null || !me.shots
+    renderHunter()
     drawHunt()
   }
 
   function shoot () {
-    if (sel == null || !me.shots) return
+    if (sel == null || !me.shots || (hunt && hunt.lock > 0)) return
     send({ t: 'shoot', a: sel })
     sel = null
     const btn = document.getElementById('shoot')
@@ -614,12 +629,28 @@
   function renderHunter () {
     renderStatus()
     const el = document.getElementById('shots')
+    const max = (hunt && hunt.maxShots) || me.maxShots || 3
+    const n = me.shots || 0
+    const lock = (hunt && hunt.lock) || 0
     if (el) {
-      const n = me.shots || 0
-      el.innerHTML = `<span aria-hidden="true">${'●'.repeat(n)}${'○'.repeat(Math.max(0, 3 - n))}</span> ${n} ${n === 1 ? 'shot' : 'shots'} left`
+      const next = n < max && hunt ? ` · next in ${Math.max(0, Math.ceil((1 - hunt.recharge) * window.ActNatural.round.SHOT_RECHARGE))} s` : ''
+      const text = `<span aria-hidden="true">${'●'.repeat(n)}${'○'.repeat(Math.max(0, max - n))}</span> ${n} ${n === 1 ? 'shot' : 'shots'}${next}`
+      if (el.innerHTML !== text) el.innerHTML = text
     }
+    const bar = document.getElementById('rechargebar')
+    if (bar) bar.style.width = (n >= max ? 100 : Math.round(((hunt && hunt.recharge) || 0) * 100)) + '%'
     const btn = document.getElementById('shoot')
-    if (btn) btn.disabled = sel == null || !me.shots
+    if (btn) {
+      btn.disabled = sel == null || !n || lock > 0
+      const label = lock > 0 ? `Locked for ${lock} s` : 'Shoot'
+      if (btn.textContent !== label) btn.textContent = label
+    }
+    const mb = document.getElementById('mark')
+    if (mb) {
+      mb.disabled = sel == null
+      const label = sel != null && markOf(sel) ? `Unmark ${markOf(sel)}` : 'Mark'
+      if (mb.textContent !== label) mb.textContent = label
+    }
   }
 
   let toastTimer = null
@@ -636,6 +667,7 @@
     if (screen !== 'hunter' || !hunt) return
     const k = e.key
     if (k === 'Enter' || k === ' ') { e.preventDefault(); shoot(); return }
+    if (k === 'm' || k === 'M') { e.preventDefault(); markSel(); return }
     if (k !== 'ArrowLeft' && k !== 'ArrowRight' && k !== 'ArrowUp' && k !== 'ArrowDown') return
     e.preventDefault()
     const live = hunt.b.filter(b => b[3] === 0).sort((p, q) => p[1] - q[1] || p[2] - q[2])
@@ -667,6 +699,14 @@
         c.strokeStyle = '#7A7266'; c.lineWidth = 1.5 * k
         c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.stroke()
         c.beginPath(); c.moveTo(x - R, y - R); c.lineTo(x + R, y + R); c.moveTo(x + R, y - R); c.lineTo(x - R, y + R); c.stroke()
+      }
+      const mk = markOf(a)
+      if (mk && st === 0) {                  // marked suspect: dashed ring and its number
+        c.strokeStyle = '#E8DFC8'; c.lineWidth = 1.5 * k; c.setLineDash([2 * k, 2 * k])
+        c.beginPath(); c.arc(x, y, R * 1.9, 0, Math.PI * 2); c.stroke(); c.setLineDash([])
+        c.fillStyle = '#E8DFC8'; c.font = `bold ${10 * k}px system-ui, sans-serif`; c.textBaseline = 'bottom'
+        c.fillText(String(mk), x + R * 2.4, y - R * 1.2)
+        c.textBaseline = 'top'; c.font = `${10 * k}px system-ui, sans-serif`
       }
       if (a === sel) {                        // crosshair
         c.strokeStyle = '#F0D28C'; c.lineWidth = 2 * k
