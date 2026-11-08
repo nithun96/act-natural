@@ -179,6 +179,77 @@
       box(x - 13, y - 2, 26, 36, 3, '#6E4A32')                 // doorway
       for (const dx of [-70, -42, 42, 70]) box(x + dx - 7, y - 10, 14, 18, 7, '#9AAAB2')
     },
+    // ---- Ålesund ----
+    canal ({ x, y }, t) {                       // Brosundet: canal lined on both sides by pastel warehouse fronts (pakkhus), boats, Hellebrua across
+      const fronts = ['#C98B6B', '#D9C27A', '#8FB0A6', '#C7A0B4', '#9DB3CC', '#E0D2B4']
+      for (const [row, top] of [[0, y - 84], [1, y + 44]]) {      // building fronts on each quay
+        for (let i = 0; i < 6; i++) {
+          const bx = x - 138 + i * 46
+          box(bx, top, 42, 38, 2, fronts[(i + row * 3) % 6])
+          poly([[bx - 2, top], [bx + 21, top - 14], [bx + 44, top]], '#4A3E36')   // gable
+          for (const wx of [8, 26]) box(bx + wx, top + 10, 8, 10, 3, '#3E4148')
+        }
+      }
+      box(x - 140, y - 46, 280, 14, 2, '#6A645C')                // stone quays
+      box(x - 140, y + 30, 280, 14, 2, '#6A645C')
+      box(x - 140, y - 32, 280, 62, 0, '#3F6E80')                // water
+      if (!reduceMotion) line([[x - 130, y + Math.sin(t) * 2], [x - 40, y + 4 + Math.sin(t + 1) * 2], [x + 50, y + Math.sin(t + 2) * 2], [x + 130, y + 4]], '#6E9AAB', 2)
+      for (const [bx, by, c] of [[-100, -20, '#E8DFC8'], [-40, 10, '#B5523B'], [90, -18, '#E8DFC8']]) {   // moored boats
+        poly([[x + bx - 22, y + by], [x + bx + 16, y + by], [x + bx + 25, y + by + 7], [x + bx + 16, y + by + 14], [x + bx - 22, y + by + 14]], c)
+        box(x + bx - 8, y + by + 3, 12, 8, 2, '#3A2C20')
+      }
+      box(x + 22, y - 36, 34, 70, 2, '#8A8378')                  // Hellebrua, a bridge across the canal
+      line([[x + 22, y - 36], [x + 22, y + 34]], '#5E5850', 3)
+      line([[x + 56, y - 36], [x + 56, y + 34]], '#5E5850', 3)
+    },
+    harbour ({ x, y }, t) {                     // Steinvågen: the sound between Aspøya and Hessa, Steinvågbrua's concrete arch, a breakwater
+      box(x - 125, y - 40, 250, 70, 6, '#3F6E80')               // the sound
+      ripple(x - 60, y + 4, 10, 30, t, '#6E9AAB')
+      box(x - 130, y - 62, 260, 22, 3, '#5C5650')               // land, Aspøya side
+      box(x - 130, y + 30, 260, 20, 3, '#5C5650')               // land, Hessa side
+      box(x + 6, y - 66, 44, 120, 2, '#B9B4AA')                 // Steinvågbrua deck, 1953 concrete
+      ctx.beginPath(); ctx.ellipse(x + 28, y - 4, 50, 30, 0, Math.PI * 0.08, Math.PI * 0.92, true); ctx.strokeStyle = '#8F8A80'; ctx.lineWidth = 6; ctx.stroke()   // the arch under it
+      line([[x - 120, y + 26], [x - 70, y + 14], [x - 30, y + 18]], '#6F675C', 9)   // breakwater
+      poly([[x + 70, y - 18], [x + 100, y - 18], [x + 108, y - 11], [x + 100, y - 4], [x + 70, y - 4]], K.cream)   // a small boat
+    },
+    cove ({ x, y }, t) {                        // Skarbøvika on Hessa: a rocky shore (fjære) between sea and hillside, houses above
+      ellipse(x - 10, y - 66, 130, 34, '#3E5236')               // hillside behind
+      box(x - 125, y - 54, 250, 54, 4, '#4E5A44')               // land
+      for (const [dx, c] of [[-90, '#C9C1AE'], [-50, '#A8483A'], [-10, '#D8D2C2'], [30, '#9DB3CC']]) {   // houses on the slope
+        box(x + dx, y - 50, 26, 20, 2, c)
+        poly([[x + dx - 3, y - 50], [x + dx + 13, y - 62], [x + dx + 29, y - 50]], '#3A3530')
+      }
+      box(x - 125, y, 250, 58, 4, '#3F6E80')                    // sea
+      if (!reduceMotion) line([[x - 120, y + 8 + Math.sin(t) * 3], [x - 40, y + 12 + Math.sin(t + 1) * 3], [x + 40, y + 12 + Math.sin(t + 2) * 3], [x + 120, y + 8 + Math.sin(t + 3) * 3]], '#B9D6DE', 3)
+      for (const [dx, dy, r] of [[-110, 0, 13], [-88, 6, 9], [-60, -2, 11], [-30, 4, 8], [0, -1, 12], [32, 5, 9], [62, 0, 13], [92, 4, 10], [114, -2, 8]]) circle(x + dx, y + dy, r, '#7A7E84')   // the rocky shore, no sand
+    },
+    school ({ x, y }) {                         // Aspøy skole (1922): large yellow, symmetrical, slate half-hipped roof, central tower with onion dome and spire
+      box(x - 120, y - 20, 240, 62, 3, '#D9B54A')               // three storeys, yellow
+      poly([[x - 124, y - 20], [x - 104, y - 44], [x + 104, y - 44], [x + 124, y - 20]], '#4A4E55')   // slate half-hipped roof
+      for (const dx of [-80, -40, 40, 80]) box(x + dx - 6, y - 40, 12, 10, 2, '#D9B54A')   // dormers in the roof
+      box(x - 14, y - 70, 28, 28, 2, '#D9B54A')                 // central tower
+      poly([[x - 17, y - 70], [x, y - 78], [x + 17, y - 70]], '#4A4E55')   // low hipped tower roof
+      ellipse(x, y - 88, 9, 12, '#5E7466')                      // elongated onion dome
+      line([[x, y - 100], [x, y - 114]], '#3A3530', 3)          // spire
+      for (const row of [-12, 4, 20]) for (const dx of [-108, -88, -68, -48, 36, 56, 76, 96]) box(x + dx, y + row, 12, 11, 1, '#3E3A33')   // symmetrical window rows
+      box(x - 18, y - 14, 36, 56, 3, '#E3C565')                 // ornamented central bay
+      box(x - 10, y + 16, 20, 26, 9, '#6E4A32')                 // central entrance
+      line([[x - 18, y + 8], [x + 18, y + 8]], '#B8922E', 3)
+    },
+    jugendcentre ({ x, y }) {                   // Jugendstilsenteret (old Swan pharmacy): corner building, round tower with a spire
+      box(x - 100, y - 30, 150, 64, 3, '#D8CDB4')               // stone-coloured facade
+      line([[x - 102, y - 30], [x + 50, y - 30]], '#4A3E36', 6)  // darker roof line
+      line([[x - 100, y - 12], [x + 50, y - 12]], '#A8977A', 2)  // ornamental band
+      for (const dx of [-88, -62, -36, -10, 16]) { box(x + dx, y - 4, 16, 22, 8, '#3E4148'); box(x + dx, y - 28, 16, 12, 6, '#3E4148') }   // curved-top windows
+      circle(x + 62, y + 2, 34, '#CFC2A6')                      // round corner tower
+      ctx.beginPath(); ctx.arc(x + 62, y + 2, 34, 0, Math.PI * 2); ctx.strokeStyle = '#A8977A'; ctx.lineWidth = 3; ctx.stroke()
+      for (const a of [-2.2, -1.2, -0.2]) box(x + 62 + Math.cos(a) * 20 - 6, y + 2 + Math.sin(a) * 20 - 8, 12, 16, 6, '#3E4148')
+      circle(x + 62, y - 14, 11, K.cream); ctx.beginPath(); ctx.arc(x + 62, y - 14, 11, 0, Math.PI * 2); ctx.strokeStyle = '#4A3E36'; ctx.lineWidth = 2; ctx.stroke()   // the clock
+      line([[x + 62, y - 14], [x + 62, y - 21]], '#4A3E36', 2); line([[x + 62, y - 14], [x + 67, y - 14]], '#4A3E36', 2)
+      poly([[x + 38, y - 26], [x + 62, y - 86], [x + 86, y - 26]], '#4A5A52')   // spire on the roof
+      line([[x + 62, y - 86], [x + 62, y - 98]], '#4A3E36', 3)
+      circle(x + 62, y - 100, 3, '#C9A227')
+    },
   }
 
   const CANOPY = {

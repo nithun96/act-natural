@@ -56,7 +56,7 @@
       colours: { floor: '#1C1E21', floorLine: '#26292D', wall: '#3A3E44' },
       landmarks: [
         at('centre', { id: 'senter', name: 'Stovner senter', kind: 'senter', below: 82 }),
-        at('tl', { id: 'haugenstua', name: 'Haugenstua T', kind: 'tbane', below: 62 }),
+        at('tl', { id: 'grorud', name: 'Grorud T', kind: 'tbane', below: 62 }),
         at('tr', { id: 'tarnet', name: 'Stovnertårnet', kind: 'tower', below: 96 }),
         at('br', { id: 'rommen', name: 'Rommen Hindu Temple', kind: 'kovil', below: 82 }),
         at('bl', { id: 'lampa', name: 'Haugenstua Lampa', kind: 'lampa', below: 104 }),
@@ -67,11 +67,11 @@
       name: 'Ålesund',
       colours: { floor: '#1B2125', floorLine: '#252C31', wall: '#38424A' },
       landmarks: [
-        at('centre', { id: 'brosundet', name: 'Brosundet', kind: 'canal', below: 84 }),
-        at('tl', { id: 'steinvagen', name: 'Steinvågen', kind: 'harbour', below: 92 }),
-        at('tr', { id: 'aksla', name: 'Aksla', kind: 'hill', below: 96 }),
-        at('br', { id: 'aspoya', name: 'Aspøya', kind: 'jugend', below: 70 }),
-        at('bl', { id: 'skarbovika', name: 'Skarbøvika', kind: 'cove', below: 108 }),
+        at('centre', { id: 'brosundet', name: 'Brosundet', kind: 'canal', below: 112 }),
+        at('tl', { id: 'steinvagen', name: 'Steinvågen', kind: 'harbour', below: 82 }),
+        at('tr', { id: 'jugendstil', name: 'Jugendstilsenteret', kind: 'jugendcentre', below: 66 }),
+        at('br', { id: 'aspoyskole', name: 'Aspøy skole', kind: 'school', below: 66 }),
+        at('bl', { id: 'skarbovika', name: 'Skarbøvika', kind: 'cove', below: 82 }),
       ],
     },
   ]
