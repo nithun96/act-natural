@@ -23,7 +23,7 @@ It will live at `nithun.no/lab/act-natural/`. It won't be linked from the site a
 
 ## Added after the build order (Nov 2026)
 
-- **Maps:** the park, Vietnam (Hoan Kiem Lake, phở stall, Hội An lanterns, rice paddy, motorbike), Jaffna (Nallur Kandaswamy, Casuarina Beach, Jaffna Public Library, palmyra palm, Jaffna Fort) East Oslo (Stovner senter, Haugenstua T, Stovnertårnet, football pitch, the blocks) and Ålesund (Brosundet, Steinvågen, Aksla, Aspøya, Skarbøvika). The host picks one between rounds (M). Landmark choices were Claude's proposal, not yet confirmed by Nithun.
+- **Maps:** the park, Vietnam (Hoan Kiem Lake, phở stall, Hội An lanterns, rice paddy, motorbike), Jaffna (Nallur Kandaswamy, Casuarina Beach, Jaffna Public Library, palmyra palm, Jaffna Fort) East Oslo (Stovner senter, Haugenstua T, Stovnertårnet, Rommen Hindu Temple, Haugenstua Lampa) and Ålesund (Brosundet, Steinvågen, Aksla, Aspøya, Skarbøvika). The host picks one between rounds (M). Landmark choices were Claude's proposal, not yet confirmed by Nithun.
 - **Early end:** a round also ends when the Hunter has no shots left and every hider still in has finished all three landmarks.
 
 ## Architecture
