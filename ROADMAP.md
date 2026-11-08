@@ -18,6 +18,8 @@ Owner hints:
 - **Early end:** a round ends when every hider still in has finished all three landmarks.
 - **Maps:** Ålesund now has Aspøy skole and Jugendstilsenteret (instead of Aspøya and Aksla), checked against written sources; East Oslo has Grorud T, Haugenstua Lampa and Rommen Hindu Temple. A bug that removed Ålesund's drawings is fixed.
 - **TV reload keeps the game** (review problem 4): scores, round, who has hunted, kicks and the map survive a reload of the TV; a round running at the reload ends there with its points kept. Phones rejoin on their own (no connection code changed).
+- **Players who have left don't hold a round up** (review problem 3): "everyone caught" and "all done" count only hiders who are connected or dropped out less than 10 s ago.
+- **Collision, part 1:** overlapping blobs are pushed apart, half each, the same for bots and humans; caught humans stay solid, blobs under the net are pinned. A headless test compares fake humans with bots over 10 simulated minutes. Still needs a real playtest: about 0.4 walks per blob per minute get stuck in crowds, where a person would steer round.
 - **Moved to its own repo**, served at `play.nithun.no/act-natural/` (once the server is set up).
 
 ## Open problems from the review
@@ -25,10 +27,9 @@ Owner hints:
 | # | Severity | What |
 |---|---|---|
 | 1 | **High** | **Neither fallback relay is switched on.** Players whose network blocks direct links (the Safari group at the workshop) can't join until coturn and/or Mosquitto run on the server and `TURN_SECRET` is set. |
-| 3 | Medium | **"Everyone caught" counts players who have left**, so a dropped-out hider keeps the round running until the clock ends. |
 | 5 | Medium | **Aiming is fiddly on small phones:** small dots, nearest-within-36-px selection, no zoom. |
 | 6 | Medium | **Canopies hide blobs** (park tree, Jaffna palm). Could be a feature, but isn't designed as one. |
-| 7 | Medium | **No collision:** blobs walk through each other and through buildings and water. Players asked for it. |
+| 7 | Medium | **No solid landmarks:** blobs bump into each other now, but still walk through buildings and water. |
 | 8 | Low | Shot rings animate even with reduced motion on. |
 | 9 | Low | End-of-round name tags overlap when humans stand close together. |
 | 10 | Low | The brief says "no server-side code", but the game now relies on coturn and Mosquitto. Record it as a decision. |
@@ -47,8 +48,7 @@ Owner hints:
 |---|---|---|---|---|
 | Set up play.nithun.no (DNS, folder, Nginx, certificate, repo secrets) | The game's new home | S | Nithun (root) | none |
 | Switch on the relays (Mosquitto and/or coturn), add `TURN_SECRET`, redeploy | Players behind strict networks still can't join | S–M | Nithun (root) with Hary | play.nithun.no |
-| Count only online hiders for "everyone caught" (problem 3) | Rounds can hang until the clock runs out | S | Claude | none |
-| Collision, part 1: soft separation | Requested by players, low risk | S | Claude | none |
+| Playtest collision for tells (do people steer round crowds where bots get stuck?) | Part 1 is only proven identical in simulation | S | Nithun + players | none |
 | Retest on real networks: Safari iPhone, Android, the work laptop as TV, office Wi‑Fi and 4G | Proves the relays fix what failed | S | Nithun + Hary | relays on |
 | Redirect nithun.no/lab/act-natural/ here and remove the game from nithun-website | One home for the game | S | Claude | play.nithun.no works |
 
