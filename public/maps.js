@@ -69,8 +69,8 @@
       landmarks: [
         at('centre', { id: 'brosundet', name: 'Brosundet', kind: 'canal', below: 84 }),
         at('tl', { id: 'steinvagen', name: 'Steinvågen', kind: 'harbour', below: 92 }),
-        at('tr', { id: 'aksla', name: 'Aksla', kind: 'hill', below: 96 }),
-        at('br', { id: 'aspoya', name: 'Aspøya', kind: 'jugend', below: 70 }),
+        at('tr', { id: 'jugendstil', name: 'Jugendstilsenteret', kind: 'jugendcentre', below: 66 }),
+        at('br', { id: 'aspoyskole', name: 'Aspøy skole', kind: 'school', below: 66 }),
         at('bl', { id: 'skarbovika', name: 'Skarbøvika', kind: 'cove', below: 108 }),
       ],
     },
