@@ -747,7 +747,7 @@
       ctx.textAlign = 'center'
       ctx.textBaseline = 'bottom'
       ctx.fillText(game
-        ? 'Enter start / next · E end round · M map · Space pause · F full screen · Q panel · H hide this line'
+        ? 'Enter start / next · E end round · M map · Space pause · F full screen · Q panel · J join screen · H hide this line'
         : 'Space pause · R reveal humans (testing only) · M map · F full screen · H hide this line', cw / 2, ch - 4)
     }
   }
