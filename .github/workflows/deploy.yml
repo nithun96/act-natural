@@ -1,0 +1,57 @@
+# Builds Act Natural and uploads it to play.nithun.no on every push to main (including merged
+# PRs). Nginx is NOT touched: nginx/play.nithun.no is installed by hand (README "Server set-up").
+# Secrets: DEPLOY_SSH_KEY (private key for the `deploy` user), DEPLOY_KNOWN_HOSTS (the server's
+#          host keys), TURN_SECRET (the relay's shared secret; empty = no relay login).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'CLAUDE.md'
+      - 'BRIEF.md'
+      - 'server/**'
+      - 'nginx/**'
+      - 'tests/**'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+
+      - name: Build
+        env:
+          TURN_SECRET: ${{ secrets.TURN_SECRET }}
+        run: npm run build
+
+      - name: Set up SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Upload
+        run: scp -r dist/* deploy@204.168.209.150:/var/www/act-natural/dist/

@@ -1,0 +1,20 @@
+{
+  "name": "act-natural",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Act Natural: a party game for a TV and everyone's phones.",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "node scripts/build.js && node scripts/serve.js",
+    "test": "node tests/run.js"
+  },
+  "dependencies": {
+    "peerjs": "1.5.5",
+    "qrcode-generator": "2.0.4"
+  },
+  "devDependencies": {
+    "peer": "1.0.2",
+    "playwright": "1.63.0"
+  }
+}

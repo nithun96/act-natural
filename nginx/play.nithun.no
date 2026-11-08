@@ -1,0 +1,87 @@
+# Nginx site for Act Natural at play.nithun.no.
+#
+# Installed BY HAND as root the first time (the deploy user's sudo rule only covers the
+# website's config), see README.md "Server set-up":
+#   scp nginx/play.nithun.no root@204.168.209.150:/etc/nginx/sites-available/play.nithun.no
+#   ln -s /etc/nginx/sites-available/play.nithun.no /etc/nginx/sites-enabled/
+#   certbot --nginx -d play.nithun.no      (adds the certificate lines below)
+#   nginx -t && systemctl reload nginx
+#
+# Keeps WebSockets open for the PeerJS proxy and the MQTT relay: "upgrade" when asked, else "close".
+map $http_upgrade $play_connection {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name play.nithun.no;
+    # certbot's HTTP challenge must still work, so the redirect lives in `location /`.
+    location ^~ /.well-known/acme-challenge/ { root /var/www/act-natural; }
+    location / { return 301 https://play.nithun.no$request_uri; }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name play.nithun.no;
+    root /var/www/act-natural/dist;
+    index index.html;
+
+    # ssl_certificate lines are added here by certbot (--nginx).
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://play.nithun.no https://0.peerjs.com wss://0.peerjs.com; frame-ancestors 'none'" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header X-Robots-Tag "noindex, nofollow" always;
+
+    gzip_types text/css application/javascript text/plain;
+    gzip_vary on;
+
+    # Introductions (PeerJS signalling), forwarded to PeerJS's public server for networks that
+    # block 0.peerjs.com. /peer/peerjs?… → https://0.peerjs.com/peerjs?… Game data never passes
+    # here. The name is looked up per request so a DNS hiccup can't stop Nginx from starting.
+    location ^~ /peer/ {
+        resolver 1.1.1.1 9.9.9.9 valid=300s ipv6=off;
+        resolver_timeout 5s;
+        set $peerjs_upstream 0.peerjs.com;
+        rewrite ^/peer/(.*)$ /$1 break;
+        proxy_pass https://$peerjs_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host 0.peerjs.com;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $play_connection;
+        proxy_ssl_server_name on;
+        proxy_ssl_name 0.peerjs.com;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+        proxy_ssl_verify_depth 3;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+        proxy_buffering off;
+    }
+
+    # The encrypted relay: Mosquitto on this server, 127.0.0.1:9001 only (server/mqtt/README.md).
+    # Everything through here is end-to-end encrypted by the game. 502 until Mosquitto runs.
+    location = /mqtt {
+        proxy_pass http://127.0.0.1:9001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $play_connection;
+        proxy_set_header Host $host;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+        proxy_buffering off;
+    }
+
+    # The game: always revalidate, so a deploy shows up at once.
+    location / {
+        expires -1;
+        try_files $uri $uri/index.html =404;
+    }
+}
