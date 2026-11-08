@@ -1,12 +1,16 @@
-# Nginx site for Act Natural at play.nithun.no.
+# Nginx site for play.nithun.no: games, one per path. Act Natural lives at /act-natural/.
 #
 # Installed BY HAND as root the first time (the deploy user's sudo rule only covers the
 # website's config), see README.md "Server set-up":
+#   mkdir -p /var/www/play/act-natural && chown -R deploy:deploy /var/www/play
 #   scp nginx/play.nithun.no root@204.168.209.150:/etc/nginx/sites-available/play.nithun.no
 #   ln -s /etc/nginx/sites-available/play.nithun.no /etc/nginx/sites-enabled/
 #   certbot --nginx -d play.nithun.no      (adds the certificate lines below)
 #   nginx -t && systemctl reload nginx
 #
+# A future game gets its own repo deploying to /var/www/play/<game>/ and its own
+# `location ^~ /<game>/` block below, copied from Act Natural's.
+
 # Keeps WebSockets open for the PeerJS proxy and the MQTT relay: "upgrade" when asked, else "close".
 map $http_upgrade $play_connection {
     default upgrade;
@@ -18,7 +22,7 @@ server {
     listen [::]:80;
     server_name play.nithun.no;
     # certbot's HTTP challenge must still work, so the redirect lives in `location /`.
-    location ^~ /.well-known/acme-challenge/ { root /var/www/act-natural; }
+    location ^~ /.well-known/acme-challenge/ { root /var/www/play; }
     location / { return 301 https://play.nithun.no$request_uri; }
 }
 
@@ -26,31 +30,43 @@ server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
     server_name play.nithun.no;
-    root /var/www/act-natural/dist;
+    root /var/www/play;
     index index.html;
 
     # ssl_certificate lines are added here by certbot (--nginx).
 
+    # Security headers for everything on play.nithun.no. A location that adds its own headers
+    # drops ALL of these, so the game's block repeats them in full.
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://play.nithun.no https://0.peerjs.com wss://0.peerjs.com; frame-ancestors 'none'" always;
+    add_header Content-Security-Policy "default-src 'self'; frame-ancestors 'none'" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
-    add_header Cross-Origin-Opener-Policy "same-origin" always;
     add_header X-Robots-Tag "noindex, nofollow" always;
 
     gzip_types text/css application/javascript text/plain;
     gzip_vary on;
 
+    # For now the root goes to the only game. Later: a small index of games.
+    location = / {
+        return 302 /act-natural/;
+    }
+
+    # ---- Act Natural (github.com/nithun96/act-natural) ----
+
+    location = /act-natural {
+        return 301 /act-natural/;
+    }
+
     # Introductions (PeerJS signalling), forwarded to PeerJS's public server for networks that
-    # block 0.peerjs.com. /peer/peerjs?… → https://0.peerjs.com/peerjs?… Game data never passes
-    # here. The name is looked up per request so a DNS hiccup can't stop Nginx from starting.
-    location ^~ /peer/ {
+    # block 0.peerjs.com. /act-natural/peer/peerjs?… → https://0.peerjs.com/peerjs?… Game data
+    # never passes here. The name is looked up per request so a DNS hiccup can't stop Nginx
+    # from starting.
+    location ^~ /act-natural/peer/ {
         resolver 1.1.1.1 9.9.9.9 valid=300s ipv6=off;
         resolver_timeout 5s;
         set $peerjs_upstream 0.peerjs.com;
-        rewrite ^/peer/(.*)$ /$1 break;
+        rewrite ^/act-natural/peer/(.*)$ /$1 break;
         proxy_pass https://$peerjs_upstream;
         proxy_http_version 1.1;
         proxy_set_header Host 0.peerjs.com;
@@ -68,7 +84,7 @@ server {
 
     # The encrypted relay: Mosquitto on this server, 127.0.0.1:9001 only (server/mqtt/README.md).
     # Everything through here is end-to-end encrypted by the game. 502 until Mosquitto runs.
-    location = /mqtt {
+    location = /act-natural/mqtt {
         proxy_pass http://127.0.0.1:9001;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -80,8 +96,16 @@ server {
     }
 
     # The game: always revalidate, so a deploy shows up at once.
-    location / {
+    location ^~ /act-natural/ {
         expires -1;
-        try_files $uri $uri/index.html =404;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://play.nithun.no https://0.peerjs.com wss://0.peerjs.com; frame-ancestors 'none'" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+        add_header Cross-Origin-Opener-Policy "same-origin" always;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        try_files $uri ${uri}index.html =404;
     }
 }

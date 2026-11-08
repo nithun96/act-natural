@@ -60,7 +60,7 @@
       Object.assign(opts, {
         host: location.hostname,
         port: Number(location.port) || (secure ? 443 : 80),
-        path: new URL('peer/', location.href).pathname,   // /lab/act-natural/peer/
+        path: new URL('peer/', location.href).pathname,   // /act-natural/peer/
         secure,
       })
     }

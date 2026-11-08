@@ -1,5 +1,5 @@
 const { chromium, devices } = require('playwright');
-const S = process.argv[2] || require('path').join(__dirname, 'out'); const base = (process.env.BASE || 'http://localhost:8765/'); const sig = '&signal=127.0.0.1:9000'
+const S = process.argv[2] || require('path').join(__dirname, 'out'); const base = (process.env.BASE || 'http://localhost:8765/act-natural/'); const sig = '&signal=127.0.0.1:9000'
 ;(async () => {
   const b = await chromium.launch(); const errs = []
   const watch = (p, n) => { p.on('pageerror', e => errs.push(n + ': ' + e.message)) }

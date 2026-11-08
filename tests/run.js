@@ -14,7 +14,7 @@ await new Promise(r => setTimeout(r, 1500))
 let failed = 0
 for (const file of readdirSync(here).filter(f => f.endsWith('.test.cjs')).sort()) {
   const code = await new Promise(resolve => {
-    const t = spawn('node', [here + file, here + 'out'], { stdio: 'inherit', env: { ...process.env, BASE: 'http://localhost:8765/' } })
+    const t = spawn('node', [here + file, here + 'out'], { stdio: 'inherit', env: { ...process.env, BASE: 'http://localhost:8765/act-natural/' } })
     const timer = setTimeout(() => t.kill(), 150000)
     t.on('exit', c => { clearTimeout(timer); resolve(c) })
   })

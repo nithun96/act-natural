@@ -1,5 +1,5 @@
 const { chromium, devices } = require('playwright')
-const base = (process.env.BASE || 'http://localhost:8765/'); const sig = '&signal=127.0.0.1:9000'
+const base = (process.env.BASE || 'http://localhost:8765/act-natural/'); const sig = '&signal=127.0.0.1:9000'
 ;(async () => {
   const b = await chromium.launch(); const errs = []
   const tv = await (await b.newContext()).newPage(); tv.on('pageerror', e => errs.push('tv ' + e.message))

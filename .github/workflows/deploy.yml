@@ -54,4 +54,4 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
       - name: Upload
-        run: scp -r dist/* deploy@204.168.209.150:/var/www/act-natural/dist/
+        run: scp -r dist/* deploy@204.168.209.150:/var/www/play/act-natural/
