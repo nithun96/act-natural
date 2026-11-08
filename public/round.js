@@ -9,6 +9,8 @@
   const MAX_SHOTS = 3          // …and can store up to three
   const SHOT_RECHARGE = 20     // seconds per new shot, while below the maximum
   const MISS_LOCK = 5          // seconds the Hunter can't shoot after hitting a bot
+  const NET_RADIUS = 130       // world units: the net covers a circle a bit bigger than a landmark
+  const NET_HOLD = 8           // seconds everything under the net is held
   const MAX_MARKS = 3          // suspects the Hunter can mark at once
   const CATCH_POINTS = 3
   const MAX_PLAYERS = 20
@@ -92,6 +94,8 @@
       g.aim = null
       g.shotsFired = []
       g.endReason = null
+      releaseNet()
+      g.netUsed = false
       g.phase = 'round'
       return true
     }
@@ -127,6 +131,7 @@
       g.aim = null
       g.marks = new Map()
       g.lockLeft = 0
+      releaseNet()
       for (const p of g.players.values()) if (p.task) p.task.hold = 0
     }
     g.endRound = () => { if (g.phase === 'round') endRound('stopped') }
@@ -181,8 +186,12 @@
         g.lockLeft = Math.max(0, g.lockLeft - dt)
         if (g.lockLeft === 0) events.push({ type: 'hunter' })
       }
+      // The net lifts after NET_HOLD. Each blob under it was given its own release time a moment
+      // after that (see throwNet), so they don't all set off together.
+      if (g.net && world.time >= g.net.until + 0.5) { g.net = null; events.push({ type: 'net' }) }
       for (const p of hiders()) {
         if (p.caught) continue
+        if (heldNow(p.blob)) { if (p.task) p.task.hold = 0; continue }   // held: no task progress
         const pts = sim.stepTask(p.task, p.blob, dt)
         if (pts) { p.score += pts; p.roundPts += pts; events.push({ type: 'task', player: p }) }
       }
@@ -203,6 +212,37 @@
     function refreshAliasesKeepAim () {
       for (const [a, b] of g.aliases) if (!world.blobs.includes(b)) g.aliases.delete(a)
       for (const b of g.marks.keys()) if (!world.blobs.includes(b)) g.marks.delete(b)
+    }
+
+    // ---- The net: a delay, never a catch ----
+    // Once per round the Hunter throws it over a blob. Every blob inside the circle at that moment,
+    // bot or human, is held still for NET_HOLD seconds; hiders under it lose their landmark progress.
+    // Nobody is caught and nothing is revealed. Each blob gets its own release a fraction later
+    // (0.05–0.3 s, the same reaction delay bots use when they set off), the same for bots and humans.
+    const heldNow = b => !!b.heldUntil && b.heldUntil > world.time
+    g.heldLeft = b => heldNow(b) ? b.heldUntil - world.time : 0
+    function releaseNet () {
+      for (const b of world.blobs) b.heldUntil = 0
+      g.net = null
+    }
+    g.throwNet = (p, alias) => {
+      if (g.phase !== 'round' || p !== g.hunter || g.netUsed) return null
+      const centre = g.aliases.get(alias)
+      if (!centre || centre.hidden || centre.gone) return null
+      const x = centre.x, y = centre.y, until = world.time + NET_HOLD
+      const held = []
+      for (const b of world.blobs) {
+        if (b.hidden || b.gone || b.out) continue
+        if (Math.hypot(b.x - x, b.y - y) > NET_RADIUS) continue
+        b.heldUntil = until + sim.rand(0.05, 0.3)
+        sim.setInput(b, 0, 0)
+        b.vx = b.vy = 0
+        held.push(b)
+      }
+      for (const q of hiders()) if (held.includes(q.blob) && q.task) q.task.hold = 0
+      g.net = { x, y, r: NET_RADIUS, until, at: world.time }
+      g.netUsed = true
+      return { held: held.length, players: hiders().filter(q => held.includes(q.blob)) }
     }
 
     // Mark or unmark a suspect. Marks take the lowest free number 1–3. Returns
@@ -274,6 +314,8 @@
         score: p.score,
         roundPts: p.roundPts,
         caught: p.caught,
+        held: !isHunter && g.phase === 'round' ? Math.ceil(g.heldLeft(p.blob)) : 0,
+        netReady: isHunter ? g.phase === 'round' && !g.netUsed : undefined,
         shots: isHunter ? g.shots : undefined,
         maxShots: isHunter ? MAX_SHOTS : undefined,
         timeLeft: Math.ceil(g.timeLeft),
@@ -302,6 +344,10 @@
         shots: g.shots, maxShots: MAX_SHOTS,
         recharge: g.shots >= MAX_SHOTS ? 1 : Math.round(g.recharge / SHOT_RECHARGE * 100) / 100,
         lock: Math.ceil(g.lockLeft),
+        netReady: !g.netUsed,
+        net: g.net && world.time < g.net.until
+          ? { x: Math.round(g.net.x / sim.W * 1000) / 1000, y: Math.round(g.net.y / sim.H * 1000) / 1000, r: g.net.r, left: Math.ceil(g.net.until - world.time) }
+          : null,
       }
     }
     function aliasOf (blob) {
@@ -316,6 +362,6 @@
   }
 
   window.ActNatural = Object.assign(window.ActNatural || {}, {
-    round: { create, ROUND_TIME, START_SHOTS, MAX_SHOTS, SHOT_RECHARGE, MISS_LOCK, MAX_MARKS, CATCH_POINTS, MAX_PLAYERS },
+    round: { create, ROUND_TIME, START_SHOTS, MAX_SHOTS, SHOT_RECHARGE, MISS_LOCK, NET_RADIUS, NET_HOLD, MAX_MARKS, CATCH_POINTS, MAX_PLAYERS },
   })
 })()

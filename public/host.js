@@ -194,6 +194,14 @@
       if (r && !r.ok) send(p.conn, { t: 'event', kind: 'marks-full' })
       return
     }
+    if (msg.t === 'net') {
+      const r = game.throwNet(p, Number(msg.a))
+      if (!r) return
+      send(p.conn, { t: 'event', kind: 'net', held: r.held })
+      sendYou(p)
+      for (const q of r.players) sendYou(q)      // their phones start the countdown
+      return
+    }
     if (msg.t === 'shoot') {
       const ev = game.shoot(p, Number(msg.a))
       if (!ev) return
@@ -204,6 +212,7 @@
     }
     if (msg.t === 'in') {
       if (p.caught || p.blob.hidden) return
+      if (game.heldLeft(p.blob) > 0) return        // held by the net: moves are ignored
       const dx = Number(msg.dx), dy = Number(msg.dy)
       if (!isFinite(dx) || !isFinite(dy)) return
       const m = Math.hypot(dx, dy)
@@ -235,6 +244,7 @@
     for (const ev of events) {
       if (ev.type === 'task') sendYou(ev.player)
       else if (ev.type === 'hunter') { if (game.hunter) sendYou(game.hunter) }
+      else if (ev.type === 'net') { for (const p of players.values()) sendYou(p) }   // the net has lifted
       else if (ev.type === 'end') broadcast()
     }
   }
@@ -251,6 +261,7 @@
           y: Math.round(p.blob.y / sim.H * 1000) / 1000,
           hold: p.task ? Math.round(p.task.hold / sim.TASK_HOLD * 100) / 100 : 0,
           tl: Math.ceil(game.timeLeft),
+          held: game.phase === 'round' ? Math.ceil(game.heldLeft(p.blob)) : 0,
         })
       }
     }, 1000 / net.POS_HZ)
@@ -483,7 +494,30 @@
     ctx.strokeStyle = C.blob; ctx.lineWidth = 2; ctx.setLineDash([4, 4])
     ctx.beginPath(); ctx.arc(x, y, sim.BLOB_R + 7, 0, Math.PI * 2); ctx.stroke()
     ctx.setLineDash([])
-    tag(x, y - sim.BLOB_R - 22, `Suspect ${n}`)
+    // Above the crosshair's top tick when the Hunter is also aiming at this blob, so they don't overlap.
+    tag(x, y - sim.BLOB_R - (game.aim === b ? 46 : 22), `Suspect ${n}`)
+  }
+
+  // The Hunter's net: a mesh over the circle with the seconds left in the middle. Shape and a
+  // number, never colour alone. It catches nobody, so it looks the same whoever is under it.
+  function drawNet (n) {
+    const left = n.until - world.time
+    if (left <= 0) return
+    ctx.save()
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(18,17,15,0.35)'; ctx.fill()
+    ctx.clip()
+    ctx.strokeStyle = 'rgba(232,223,200,0.55)'; ctx.lineWidth = 2
+    ctx.beginPath()
+    for (let d = -n.r * 2; d <= n.r * 2; d += 22) {
+      ctx.moveTo(n.x + d - n.r, n.y - n.r); ctx.lineTo(n.x + d + n.r, n.y + n.r)
+      ctx.moveTo(n.x + d + n.r, n.y - n.r); ctx.lineTo(n.x + d - n.r, n.y + n.r)
+    }
+    ctx.stroke()
+    ctx.restore()
+    ctx.strokeStyle = C.blob; ctx.lineWidth = 4
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); ctx.stroke()
+    tag(n.x, n.y - n.r - 18, `Net · ${Math.ceil(left)} s`)
   }
 
   // A shot: a ring that spreads out, and what it hit.
@@ -539,6 +573,7 @@
     for (const lm of world.landmarks) drawCanopy(lm)
     for (const lm of world.landmarks) drawLabel(lm)
     if (game) {
+      if (game.phase === 'round' && game.net) drawNet(game.net)
       if (game.phase === 'round') for (const [b, n] of game.marks) if (!b.hidden) drawMark(b, n, alpha)
       if (game.aim && game.phase === 'round') drawAim(game.aim, alpha)
       if (game.phase === 'round') for (const shot of game.shotsFired) drawShot(shot)   // after the round, the name tags take over
@@ -570,7 +605,7 @@
       ctx.font = `600 ${big}px system-ui, sans-serif`
       ctx.textAlign = 'center'
       ctx.fillStyle = C.blob
-      const text = `Round ${game.round} · Hunter: ${game.hunter ? game.hunter.name : ''} · ${clock} · ${shots} ${game.shots} ${game.shots === 1 ? 'shot' : 'shots'}${shotState}`
+      const text = `Round ${game.round} · Hunter: ${game.hunter ? game.hunter.name : ''} · ${clock} · ${shots} ${game.shots} ${game.shots === 1 ? 'shot' : 'shots'}${shotState} · ${game.netUsed ? 'net used' : 'net ready'}`
       const w = ctx.measureText(text).width + big * 1.2
       ctx.fillStyle = 'rgba(18,17,15,0.85)'
       ctx.fillRect(cw / 2 - w / 2, oy + 10, w, big * 1.6)

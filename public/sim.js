@@ -186,6 +186,8 @@
     world.time += dt
     for (const b of world.blobs) {
       if (b.hidden) continue
+      // Held by the Hunter's net: no movement, and a bot's driver waits too.
+      if (b.heldUntil && b.heldUntil > world.time) { b.px = b.x; b.py = b.y; b.vx = b.vy = 0; continue }
       b.px = b.x; b.py = b.y        // for smooth drawing between steps
       if (b.driver) drive(b, dt)
       stepHuman(b, dt)
