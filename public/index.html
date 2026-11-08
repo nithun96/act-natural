@@ -114,6 +114,10 @@
   .lobby .kick:hover, .lobby .kick:focus-visible { color: var(--text); border-color: var(--muted); }
   .lobby li .kick { margin-left: 8px; }
   .lobby .via { font-size: 0.75em; padding: 0 5px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); }
+  .recharge { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .recharge span { display: block; height: 100%; width: 0; background: var(--text); transition: width 0.1s linear; }
+  .hunt-buttons { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+  .hunt-buttons .mark { min-height: 64px; font-size: 18px; }
 </style>
 </head>
 <body>
