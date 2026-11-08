@@ -9,6 +9,7 @@ const base = (process.env.BASE || 'http://localhost:8765/act-natural/'); const s
   for (const n of ['Ada', 'Bo']) { const p = await (await b.newContext(devices['iPhone 13'])).newPage(); p.on('pageerror', e => errs.push(n + ' ' + e.message)); await p.goto(base + '?room=' + code + sig); await p.fill('#name', n); await p.click('button[type=submit]'); await p.waitForSelector('#pad'); ph[n] = p }
   const blobs = () => tv.evaluate(() => window.__actNatural.world.blobs.length)
   console.log('before: players', await tv.evaluate(() => window.__actNatural.players.size), 'blobs', await blobs(), '| kick buttons:', await tv.$$eval('.lobby button.kick', bs => bs.map(x => x.getAttribute('aria-label'))))
+  await tv.keyboard.press('Escape')   // close the big join view (open by itself before round 1) to reach the panel
   await tv.click('button.kick[aria-label="Kick Bo"]'); await ph.Bo.waitForTimeout(800)
   console.log('after kick: players', await tv.evaluate(() => [...window.__actNatural.players.values()].map(p => p.name)), 'blobs', await blobs())
   console.log('Bo screen:', (await ph.Bo.textContent('main')).replace(/\s+/g, ' ').trim())

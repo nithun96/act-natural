@@ -20,6 +20,7 @@ Owner hints:
 - **TV reload keeps the game** (review problem 4): scores, round, who has hunted, kicks and the map survive a reload of the TV; a round running at the reload ends there with its points kept. Phones rejoin on their own (no connection code changed).
 - **Players who have left don't hold a round up** (review problem 3): "everyone caught" and "all done" count only hiders who are connected or dropped out less than 10 s ago.
 - **Collision, part 1:** overlapping blobs are pushed apart, half each, the same for bots and humans; caught humans stay solid, blobs under the net are pinned. A headless test compares fake humans with bots over 10 simulated minutes. Still needs a real playtest: about 0.4 walks per blob per minute get stuck in crowds, where a person would steer round.
+- **Full-screen join view** (J on the TV, or the panel's "Big join screen" button): a very large QR code, the room code and address, and who has joined ("away" in words). It opens by itself before round 1, Enter starts the round from it, and J, Esc or starting a round closes it.
 - **Moved to its own repo**, served at `play.nithun.no/act-natural/` (once the server is set up).
 
 ## Open problems from the review
@@ -59,7 +60,6 @@ Owner hints:
 | Map effects and character variety from the design canvas | More depth and variety per map | M–L | Claude | Nithun's picks on the canvas |
 | Collision, part 2: solid landmarks | Makes maps feel physical | M | Claude | part 1 |
 | Easier aiming (hold to zoom, or step through nearby blobs) | Mis-taps waste shots | S–M | Claude | none |
-| Full-screen join view (big QR code) | Easier for big groups | S | Claude | none |
 | Confirm landmarks and drawings with Nithun | Real places with personal meaning | S | Nithun + Claude | Nithun's input |
 
 ## Later
