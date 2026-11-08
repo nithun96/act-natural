@@ -20,6 +20,9 @@ Owner hints:
 - **TV reload keeps the game** (review problem 4): scores, round, who has hunted, kicks and the map survive a reload of the TV; a round running at the reload ends there with its points kept. Phones rejoin on their own (no connection code changed).
 - **Players who have left don't hold a round up** (review problem 3): "everyone caught" and "all done" count only hiders who are connected or dropped out less than 10 s ago.
 - **Collision, part 1:** overlapping blobs are pushed apart, half each, the same for bots and humans; caught humans stay solid, blobs under the net are pinned. A headless test compares fake humans with bots over 10 simulated minutes. Still needs a real playtest: about 0.4 walks per blob per minute get stuck in crowds, where a person would steer round.
+- **Easier aiming** (review problem 5): on the Hunter's phone, tapping the same spot again steps through a crowd ("2 of 3 here"), and holding opens a magnifier; lifting aims. Tapping empty space now aims at nothing (it used to aim at blob 0). Not yet tried on a real iPhone.
+- **TV polish** (problems 8 and 9): shot rings stand still with reduced motion; end-of-round name tags move to a free spot with a line back to their blob instead of overlapping.
+- **Full-screen join view** (J on the TV, or the panel's "Big join screen" button): a very large QR code, the room code and address, and who has joined ("away" in words). It opens by itself before round 1, Enter starts the round from it, and J, Esc or starting a round closes it.
 - **Moved to its own repo**, served at `play.nithun.no/act-natural/` (once the server is set up).
 
 ## Open problems from the review
@@ -27,11 +30,8 @@ Owner hints:
 | # | Severity | What |
 |---|---|---|
 | 1 | **High** | **Neither fallback relay is switched on.** Players whose network blocks direct links (the Safari group at the workshop) can't join until coturn and/or Mosquitto run on the server and `TURN_SECRET` is set. |
-| 5 | Medium | **Aiming is fiddly on small phones:** small dots, nearest-within-36-px selection, no zoom. |
 | 6 | Medium | **Canopies hide blobs** (park tree, Jaffna palm). Could be a feature, but isn't designed as one. |
 | 7 | Medium | **No solid landmarks:** blobs bump into each other now, but still walk through buildings and water. |
-| 8 | Low | Shot rings animate even with reduced motion on. |
-| 9 | Low | End-of-round name tags overlap when humans stand close together. |
 | 10 | Low | The brief says "no server-side code", but the game now relies on coturn and Mosquitto. Record it as a decision. |
 | 11 | Low | Several landmarks are Claude's picks that Nithun hasn't confirmed (Vietnam, Jaffna, how Haugenstua Lampa looks, Jugendstilsenteret's colours). |
 
@@ -58,8 +58,6 @@ Owner hints:
 |---|---|---|---|---|
 | Map effects and character variety from the design canvas | More depth and variety per map | M–L | Claude | Nithun's picks on the canvas |
 | Collision, part 2: solid landmarks | Makes maps feel physical | M | Claude | part 1 |
-| Easier aiming (hold to zoom, or step through nearby blobs) | Mis-taps waste shots | S–M | Claude | none |
-| Full-screen join view (big QR code) | Easier for big groups | S | Claude | none |
 | Confirm landmarks and drawings with Nithun | Real places with personal meaning | S | Nithun + Claude | Nithun's input |
 
 ## Later

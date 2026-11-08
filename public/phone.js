@@ -336,7 +336,7 @@
       updateClock()
       if (sel != null && !msg.b.some(([a, , , st]) => a === sel && st === 0)) setSel(null)
       renderHunter()
-      drawHunt()
+      if (press && press.open) updateLoupe(); else drawHunt()   // blobs moved: the magnifier's pick may change
     } else if (msg.t === 'event') {
       toast(msg.kind === 'caught' ? `Caught ${msg.name}! +3`
         : msg.kind === 'marks-full' ? 'You can mark 3 suspects at most. Unmark one first.'
@@ -583,13 +583,171 @@
   let hunt = null      // { b: [[alias, x, y, state]], tl, aim } — state 0 in play, 1 caught, 2 shot bot
   let sel = null
 
+  // ---- Aiming on a small screen ----
+  // The room is squeezed into a map about 340 px wide on an iPhone SE, so blobs are 8 px dots and
+  // a crowd is a smudge. Two helps, both one-handed with the thumb that taps:
+  // - Tap: aims at the nearest blob within reach, at once (as before). Tap the same spot again
+  //   within a couple of seconds and it steps to the next nearest blob there, and so on round.
+  // - Hold (or start sliding): a magnifier opens beside the thumb, showing the area under it at 3×.
+  //   Sliding moves the aiming point at half speed, so small corrections are easy; lifting aims at
+  //   the blob ringed in the magnifier (the nearest within half the usual reach), or at nothing. It only redraws what the map already shows, so it can't
+  //   tell bots from humans either.
+  const REACH = 36         // CSS px around a tap that count as "on" a blob
+  const HOLD_MS = 280      // a press this long opens the magnifier
+  const SLOP = 10          // or sliding this far
+  const GAIN = 0.5         // the aiming point moves at half the finger's speed while magnified
+  const LOUPE = 144        // magnifier size in CSS px
+  const ZOOM = 3
+  const LOUPE_DOTS = 1.8   // blobs and text in the magnifier, relative to the map
+  const AGAIN_PX = 22      // a second tap this close to the first...
+  const AGAIN_MS = 2500    // ...and this soon steps to the next blob
+  let loupeEl = null
+  let press = null         // { id, x0, y0, ax, ay, open, cand, timer, fx, fy }: a finger down on the map
+  let taps = null          // { x, y, t, list, i }: the last tap, for stepping through a crowd
+
+  const mapRect = () => hmapEl.getBoundingClientRect()
+  // Live blobs within reach of a point (fractions of the map), nearest first.
+  function near (x, y, r, reach = REACH) {
+    const out = []
+    if (!hunt) return out
+    for (const [a, bx, by, st] of hunt.b) {
+      if (st !== 0) continue
+      const d = Math.hypot((bx - x) * r.width, (by - y) * r.height)
+      if (d <= reach) out.push([d, a])
+    }
+    return out.sort((p, q) => p[0] - q[0]).map(p => p[1])
+  }
+  const isLive = a => !!hunt && hunt.b.some(b => b[0] === a && b[3] === 0)
+
+  function aimNote (text) {
+    const el = document.getElementById('aimnote')
+    if (el && el.textContent !== text) el.textContent = text
+  }
+
+  function aimDown (e) {
+    e.preventDefault()
+    if (!hunt) return
+    if (press) endPress()                       // a stray press that never lifted
+    const r = mapRect()
+    const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height
+    const px = e.clientX - r.left, py = e.clientY - r.top
+    const now = performance.now()
+    if (taps && now - taps.t < AGAIN_MS && Math.hypot(px - taps.x, py - taps.y) <= AGAIN_PX && taps.list.filter(isLive).length > 1) {
+      taps.list = taps.list.filter(isLive)      // step to the next blob in this crowd
+      const at = taps.list.indexOf(sel)
+      taps.i = (at < 0 ? taps.i : at + 1) % taps.list.length
+      taps.t = now
+    } else {
+      taps = { x: px, y: py, t: now, list: near(x, y, r), i: 0 }
+    }
+    const n = taps.list.length
+    setSel(n ? taps.list[taps.i] : null)
+    aimNote(n > 1 ? `${taps.i + 1} of ${n} here · tap again for the next` : '')
+    try { hmapEl.setPointerCapture(e.pointerId) } catch (err) { /* synthetic or already gone */ }
+    press = { id: e.pointerId, x0: e.clientX, y0: e.clientY, ax: x, ay: y, open: false, cand: sel, fx: e.clientX, fy: e.clientY }
+    press.timer = setTimeout(openLoupe, HOLD_MS)
+  }
+
+  function aimMove (e) {
+    if (!press || e.pointerId !== press.id) return
+    press.fx = e.clientX; press.fy = e.clientY
+    if (!press.open) {
+      if (Math.hypot(e.clientX - press.x0, e.clientY - press.y0) < SLOP) return
+      openLoupe()
+    }
+    updateLoupe()
+  }
+
+  function aimUp (e) {
+    if (!press || e.pointerId !== press.id) return
+    const p = press
+    endPress()
+    if (p.open) {                               // lift: aim at what the magnifier ringed
+      taps = null
+      aimNote('')
+      setSel(p.cand)
+    }
+  }
+
+  function aimCancel (e) {
+    if (!press || e.pointerId !== press.id) return
+    endPress()
+    drawHunt()
+  }
+
+  function endPress () {
+    clearTimeout(press.timer)
+    press = null
+    if (loupeEl) loupeEl.classList.remove('on')
+  }
+
+  function openLoupe () {
+    if (!press || press.open || !loupeEl || !hmapEl) return
+    press.open = true
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    loupeEl.width = loupeEl.height = Math.round(LOUPE * dpr)
+    updateLoupe()
+    loupeEl.classList.add('on')
+  }
+
+  // The aiming point follows the finger at GAIN, from where it went down; the candidate is the
+  // nearest live blob to it within reach (none if the point is in empty space).
+  function updateLoupe () {
+    if (!press || !press.open || !hmapEl) return
+    const r = mapRect()
+    const clamp = v => Math.max(0, Math.min(1, v))
+    const ax = clamp((press.x0 - r.left + (press.fx - press.x0) * GAIN) / r.width)
+    const ay = clamp((press.y0 - r.top + (press.fy - press.y0) * GAIN) / r.height)
+    press.ax = ax; press.ay = ay
+    const list = near(ax, ay, r, REACH / 2)   // tighter: the point is placed with care now
+    press.cand = list.length ? list[0] : null
+    placeLoupe()
+    drawHunt()   // and the magnifier
+  }
+
+  // Beside the thumb, never under it: above if there's room, otherwise to the side with more space.
+  function placeLoupe () {
+    const W = window.innerWidth, H = window.innerHeight, half = LOUPE / 2, gap = 34, m = 6
+    let cx = press.fx, cy = press.fy - gap - half
+    if (cy - half < m) {
+      cy = press.fy
+      cx = press.fx < W / 2 ? press.fx + gap + half : press.fx - gap - half
+    }
+    cx = Math.max(half + m, Math.min(W - half - m, cx))
+    cy = Math.max(half + m, Math.min(H - half - m, cy))
+    loupeEl.style.left = Math.round(cx - half) + 'px'
+    loupeEl.style.top = Math.round(cy - half) + 'px'
+  }
+
+  function drawLoupe () {
+    if (!loupeEl || !hmapEl.width) return
+    const c = loupeEl.getContext('2d')
+    const L = loupeEl.width, w = hmapEl.width, h = hmapEl.height
+    const s = ZOOM * (L / LOUPE) / (w / mapRect().width)   // loupe pixels per map pixel
+    c.setTransform(1, 0, 0, 1, 0, 0)
+    c.fillStyle = '#12110F'; c.fillRect(0, 0, L, L)       // outside the room
+    c.setTransform(s, 0, 0, s, L / 2 - s * press.ax * w, L / 2 - s * press.ay * h)
+    paintHunt(c, w, h, press.cand, LOUPE_DOTS / ZOOM)
+    c.setTransform(1, 0, 0, 1, 0, 0)
+    // The aiming point: a small open square, so it reads apart from the ringed blob.
+    const q = L / 2, u = L / LOUPE
+    c.strokeStyle = '#E8DFC8'; c.lineWidth = 1.5 * u
+    c.strokeRect(q - 4 * u, q - 4 * u, 8 * u, 8 * u)
+    c.setLineDash([4 * u, 4 * u])                         // how far it reaches
+    c.beginPath(); c.arc(q, q, REACH / 2 * ZOOM * u, 0, Math.PI * 2); c.stroke(); c.setLineDash([])
+  }
+
   function showHunter () {
     app.classList.add('playing')
     sel = null
+    press = null
+    taps = null
     app.innerHTML =
       '<p class="status-line" id="statusline"></p>' +
-      '<canvas class="map hunt" id="hmap" role="img" aria-label="Map of every blob. Tap one to aim. Arrow keys also choose."></canvas>' +
+      '<canvas class="map hunt" id="hmap" role="img" aria-label="Map of every blob. Tap one to aim; tap the same spot again for the next one nearby; hold to magnify. Arrow keys also choose."></canvas>' +
+      '<canvas class="loupe" id="loupe" aria-hidden="true"></canvas>' +
       '<div class="hunter-bar">' +
+      '<p class="aimnote" id="aimnote" aria-live="polite"></p>' +
       '<p class="shots" id="shots"></p>' +
       '<div class="recharge" aria-hidden="true"><span id="rechargebar"></span></div>' +
       '<div class="hunt-buttons">' +
@@ -598,24 +756,17 @@
       '<button type="button" class="quiet net" id="net" disabled>Throw net</button>' +
       '</div>' +
       '<p class="toast" id="toast" role="status"></p>' +
-      '<p class="hint">Watch the TV. Tap a blob here to aim; everyone sees the crosshair. Mark up to 3 suspects to keep track of them. Once per round, throw a net to hold everything under it for 8 s (nobody is caught). Arrow keys, Enter (shoot), M (mark) and N (net) work too.</p>' +
+      '<p class="hint">Watch the TV. Tap a blob here to aim; everyone sees the crosshair. In a crowd, tap again for the next one, or hold to magnify, slide and lift. Mark up to 3 suspects to keep track of them. Once per round, throw a net to hold everything under it for 8 s (nobody is caught). Arrow keys, Enter (shoot), M (mark) and N (net) work too.</p>' +
       '</div>'
     hmapEl = document.getElementById('hmap')
     sizeMap()
     renderHunter()
-    hmapEl.addEventListener('pointerdown', e => {
-      e.preventDefault()
-      if (!hunt) return
-      const r = hmapEl.getBoundingClientRect()
-      const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height
-      let best = null, bestD = Infinity
-      for (const [a, bx, by, st] of hunt.b) {
-        if (st !== 0) continue
-        const d = Math.hypot((bx - x) * r.width, (by - y) * r.height)
-        if (d < bestD) { bestD = d; best = a }
-      }
-      setSel(bestD <= 36 ? best : null)
-    })
+    loupeEl = document.getElementById('loupe')
+    hmapEl.addEventListener('pointerdown', aimDown)
+    hmapEl.addEventListener('pointermove', aimMove)
+    hmapEl.addEventListener('pointerup', aimUp)
+    hmapEl.addEventListener('pointercancel', aimCancel)
+    hmapEl.addEventListener('contextmenu', e => e.preventDefault())   // a long press is the magnifier, not a menu
     document.getElementById('shoot').addEventListener('click', shoot)
     document.getElementById('mark').addEventListener('click', markSel)
     document.getElementById('net').addEventListener('click', throwNet)
@@ -637,7 +788,7 @@
 
   function setSel (a) {
     sel = a
-    send({ t: 'aim', a })
+    send({ t: 'aim', a: a == null ? -1 : a })   // -1 aims at nothing (null would read as blob 0)
     renderHunter()
     drawHunt()
   }
@@ -646,6 +797,8 @@
     if (sel == null || !me.shots || (hunt && hunt.lock > 0)) return
     send({ t: 'shoot', a: sel })
     sel = null
+    taps = null
+    aimNote('')
     const btn = document.getElementById('shoot')
     if (btn) btn.disabled = true
   }
@@ -708,11 +861,18 @@
     setSel(live[(i + step + live.length) % live.length][0])
   })
 
+  // While the magnifier is open, the map rings the blob that lifting would aim at.
   function drawHunt () {
     if (!hmapEl || !hmapEl.width) return
-    const c = hmapEl.getContext('2d')
-    const w = hmapEl.width, h = hmapEl.height
-    const k = w / 400
+    paintHunt(hmapEl.getContext('2d'), hmapEl.width, hmapEl.height, press && press.open ? press.cand : sel)
+    if (press && press.open) drawLoupe()
+  }
+
+  // The room as the Hunter sees it, in map pixels (the magnifier draws it again, scaled up).
+  // `u` scales dots, lines and text: the magnifier spreads blobs out 3× but draws them only
+  // 1.8× bigger, so blobs that touch on the map have clear gaps between them there.
+  function paintHunt (c, w, h, ring, u = 1) {
+    const k = w / 400 * u
     c.fillStyle = '#1F1C18'; c.fillRect(0, 0, w, h)
     c.strokeStyle = '#3A342C'; c.lineWidth = 3 * k; c.strokeRect(1.5 * k, 1.5 * k, w - 3 * k, h - 3 * k)
     c.textAlign = 'center'; c.textBaseline = 'top'
@@ -749,7 +909,7 @@
         c.fillText(String(mk), x + R * 2.4, y - R * 1.2)
         c.textBaseline = 'top'; c.font = `${10 * k}px system-ui, sans-serif`
       }
-      if (a === sel) {                        // crosshair
+      if (a === ring) {                       // crosshair
         c.strokeStyle = '#F0D28C'; c.lineWidth = 2 * k
         c.beginPath(); c.arc(x, y, R * 2.4, 0, Math.PI * 2); c.stroke()
         c.beginPath()

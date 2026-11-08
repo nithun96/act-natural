@@ -18,7 +18,7 @@ const S = process.argv[2] || require('path').join(__dirname, 'out'); const base 
   const g = () => tv.evaluate(() => { const ps = [...window.__actNatural.players.values()]; return ps.map(p => ({ n: p.name, s: p.score, c: p.caught, hid: !!p.blob.hidden, x: p.blob.x / 1600, y: p.blob.y / 900 })) })
   console.log('state:', JSON.stringify(await g()))
   await ph.Ada.waitForTimeout(400)
-  const tapAt = async (p, nx, ny) => { const r = await p.$eval('#hmap', e => { const b = e.getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height } }); await p.dispatchEvent('#hmap', 'pointerdown', { clientX: r.x + nx * r.w, clientY: r.y + ny * r.h, pointerId: 5, isPrimary: true }) }
+  const tapAt = async (p, nx, ny) => { const r = await p.$eval('#hmap', e => { const b = e.getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height } }); const ev = { clientX: r.x + nx * r.w, clientY: r.y + ny * r.h, pointerId: 5, isPrimary: true }; await p.dispatchEvent('#hmap', 'pointerdown', ev); await p.dispatchEvent('#hmap', 'pointerup', ev) }
   // aim at Bo
   let bo = (await g()).find(p => p.n === 'Bo')
   await tapAt(ph.Ada, bo.x, bo.y); await ph.Ada.waitForTimeout(300)

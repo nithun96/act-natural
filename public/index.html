@@ -32,6 +32,38 @@
   .lobby .keys, .lobby .status { color: var(--muted); font-size: 0.8em; margin: 1em 0 0; }
   .lobby[hidden] { display: none; }
 
+  /* TV: full-screen join view (J). Sized in vh/vw so it reads from across a room on a 1080p TV and still fits a 720p laptop */
+  .joinview { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; gap: 5vw; padding: 5vh 5vw; background: var(--bg); outline: none; }
+  .joinview[hidden] { display: none; }
+  .joinview .jv-qr { flex: none; background: #fff; padding: 2vmin; border-radius: 1.5vmin; }
+  .joinview .qr { display: block; width: min(72vh, 42vw); height: auto; image-rendering: pixelated; }
+  .joinview .jv-side { flex: 1; min-width: 0; max-width: 60vw; max-height: 100%; display: flex; flex-direction: column; font-size: 3vh; }
+  .joinview h2 { font: 400 1.8em/1.1 Georgia, serif; margin: 0 0 0.3em; }
+  .joinview .jv-step { color: var(--muted); margin: 0; }
+  .joinview .jv-url { font-size: 1.5em; font-weight: 700; line-height: 1.25; margin: 0.1em 0 0.5em; overflow-wrap: anywhere; }
+  .joinview .jv-code { font: 700 4.4em/1 ui-monospace, Menlo, monospace; letter-spacing: 0.12em; margin: 0.15em 0 0; padding: 0.12em 0.2em 0.12em 0.32em; border: 0.05em solid var(--text); border-radius: 0.12em; align-self: flex-start; }
+  .joinview .jv-status { color: #F0B08C; font-size: 0.75em; margin: 0.6em 0 0; }
+  .joinview h3 { font-size: 1em; font-weight: 600; color: var(--muted); margin: 0.9em 0 0.3em; }
+  .joinview .jv-names { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(7em, 10em)); gap: 0.1em 1em; min-height: 0; overflow: hidden; font-size: 1.1em; }
+  .joinview .jv-names.many { font-size: 0.75em; line-height: 1.3; grid-template-columns: repeat(auto-fill, minmax(6em, 7.5em)); }   /* up to 20 players (round.js MAX_PLAYERS) in 5 rows */
+  .joinview .jv-names li { display: flex; align-items: baseline; gap: 0.4em; min-width: 0; }
+  .joinview .jv-names .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .joinview .jv-names li.away { color: #7A7266; font-style: italic; }
+  .joinview .awaytag { flex: none; font: 600 0.7em system-ui, sans-serif; font-style: normal; padding: 0 0.5em; border: 1px dashed currentColor; border-radius: 1em; }
+  .joinview .jv-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6em 1em; margin-top: 1em; }
+  .joinview .jv-foot button { font-size: 0.8em; min-height: 2.4em; }
+  .joinview .next { display: flex; align-items: center; gap: 0.5em; }
+  .joinview .next[disabled] { opacity: 0.5; cursor: default; }
+  @media (max-aspect-ratio: 5/4) {
+    .joinview { flex-direction: column; justify-content: flex-start; gap: 3vh; overflow-y: auto; }
+    .joinview .qr { width: min(38vh, 80vw); }
+    .joinview .jv-side { max-width: 90vw; font-size: 2.2vh; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .joinview:not([hidden]) { animation: jv-in 0.25s ease-out; }
+    @keyframes jv-in { from { opacity: 0; } to { opacity: 1; } }
+  }
+
   /* Phone */
   .phone { max-width: 480px; margin: 0 auto; padding: 32px 16px; }
   .phone h1 { font: 400 40px/1.15 Georgia, serif; margin: 0 0 12px; }
@@ -94,7 +126,11 @@
   .status-line .clock.low::before { content: "⏱ "; }
 
   /* Phone: Hunter */
-  .map.hunt { touch-action: none; cursor: crosshair; max-width: none; width: min(100%, calc((100vh - 250px) * 16 / 9)); }
+  .map.hunt { touch-action: none; cursor: crosshair; max-width: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; width: min(100%, calc((100vh - 250px) * 16 / 9)); }
+  .loupe { position: fixed; left: 0; top: 0; width: 144px; height: 144px; border-radius: 50%; border: 3px solid var(--text); box-shadow: 0 0 0 2px var(--bg), 0 6px 24px rgba(0,0,0,0.6); pointer-events: none; z-index: 5; opacity: 0; visibility: hidden; transform: scale(0.85); transition: opacity 0.12s, transform 0.12s; }
+  .loupe.on { opacity: 1; visibility: visible; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .loupe { transition: none; transform: none; } }
+  .hunter-bar .aimnote { color: var(--muted); font-size: 14px; min-height: 1.5em; }
   .hunter-bar .hint { color: #7A7266 !important; font-size: 14px; }
   .hunter-bar { flex: none; width: 100%; max-width: 560px; margin: 0 auto; display: grid; gap: 10px; }
   .hunter-bar p { margin: 0; }

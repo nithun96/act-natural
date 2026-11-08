@@ -24,6 +24,8 @@
   let roomCode = null
   let netStatus = demo ? 'demo' : 'starting'
   const lobby = demo ? null : buildLobby()
+  const joinView = demo ? null : buildJoinView()
+  let joinOpen = false   // the full-screen join view (J); opens by itself before round 1
 
   // The room code and the relay secret are kept in this browser, so reloading the TV keeps the
   // same room and phones find their way back without scanning again (idea from mafia-online).
@@ -236,6 +238,7 @@
   function broadcast () {
     for (const p of players.values()) sendYou(p)
     if (lobby) lobby.hidden = game.phase === 'round'   // the panel steps aside while a round runs
+    if (game.phase === 'round') joinOpen = false   // and so does the big join view
     renderLobby()
   }
 
@@ -281,6 +284,66 @@
     return el
   }
 
+  // ---- Full-screen join view (J): the panel's QR code, room code and names, big enough to read across a room ----
+  function buildJoinView () {
+    const el = document.createElement('section')
+    el.className = 'joinview'
+    el.hidden = true
+    el.tabIndex = -1   // takes focus when it opens, so Enter starts the round rather than pressing a hidden button
+    el.setAttribute('role', 'dialog')
+    el.setAttribute('aria-modal', 'true')
+    el.setAttribute('aria-label', 'Join the game')
+    document.body.appendChild(el)
+    return el
+  }
+
+  function setJoinView (open) {
+    if (!joinView || (open && game.phase === 'round')) return   // during a round the room stays in view (Q still shows the QR code)
+    joinOpen = open
+    renderLobby()
+    if (open) joinView.focus({ preventScroll: true })
+    else if (document.activeElement === joinView || joinView.contains(document.activeElement)) document.activeElement.blur()
+  }
+
+  // The QR code both views show: the same join link, built by net.joinUrl.
+  function joinQrSrc () {
+    const qr = qrcode(0, 'M')
+    qr.addData(net.joinUrl(roomCode, secret))
+    qr.make()
+    return qr.createDataURL(8, 2)
+  }
+
+  function renderJoinView () {
+    if (!joinView) return
+    joinView.hidden = !joinOpen
+    if (!joinOpen) { joinView.innerHTML = ''; return }
+    const close = '<button type="button" class="quiet" id="jvclose">Close <kbd>J</kbd> <kbd>Esc</kbd></button>'
+    if (!roomCode) {
+      joinView.innerHTML = `<div class="jv-side"><p class="jv-status">${netStatus === 'starting' ? 'Opening the room…' : esc(netStatus)}</p>${close}</div>`
+    } else {
+      const names = [...players.values()].sort((a, b) => a.order - b.order)
+        .map(p => p.conn ? `<li><span class="nm">${esc(p.name)}</span></li>` : `<li class="away"><span class="nm">${esc(p.name)}</span> <span class="awaytag">away</span></li>`).join('')
+      const next = game.nextLabel()
+      const button = next ? `<button type="button" class="next" id="jvnext"${(game.phase === 'lobby' || (game.phase === 'results' && !game.everyoneHunted())) && !game.canStart() ? ' disabled' : ''}>${esc(next)} <kbd>Enter</kbd></button>` : ''
+      joinView.innerHTML =
+        `<div class="jv-qr"><img class="qr" alt="QR code to join room ${roomCode}" src="${joinQrSrc()}"></div>` +
+        '<div class="jv-side">' +
+          '<h2>Join on your phone</h2>' +
+          '<p class="jv-step">Scan the QR code, or go to</p>' +
+          `<p class="jv-url">${esc(siteAddress())}</p>` +
+          '<p class="jv-step">and enter the room code</p>' +
+          `<p class="jv-code" aria-label="Room code ${roomCode.split('').join(' ')}">${roomCode}</p>` +
+          (netStatus === 'open' ? '' : `<p class="jv-status">${esc(netStatus)}</p>`) +
+          `<h3>${players.size ? `${players.size} ${players.size === 1 ? 'player' : 'players'} in` : 'Nobody has joined yet'}</h3>` +
+          `<ul class="jv-names${players.size > 8 ? ' many' : ''}">${names}</ul>` +
+          `<div class="jv-foot">${button}${close}</div>` +
+        '</div>'
+      const nb = document.getElementById('jvnext')
+      if (nb) nb.addEventListener('click', nextStep)
+    }
+    document.getElementById('jvclose').addEventListener('click', () => setJoinView(false))
+  }
+
   // The short address to type: no https://, no index.html, no trailing slash.
   function siteAddress () {
     return (location.host + location.pathname).replace(/index\.html$/, '').replace(/\/$/, '')
@@ -304,10 +367,12 @@
 
   function renderLobby () {
     if (!lobby) return
+    renderJoinView()
     if (!roomCode) {
       lobby.innerHTML = `<p class="status">${netStatus === 'starting' ? 'Opening the room…' : esc(netStatus)}</p>`
       return
     }
+    const joinLine = game.phase === 'round' ? '' : '<p class="mapline"><span>Big join screen</span> <button type="button" class="quiet" id="joinview">Show <kbd>J</kbd></button></p>'
     const status = netStatus === 'open' ? '' : `<p class="status">${esc(netStatus)}</p>`
     const mapLine = game.phase === 'round' ? '' : `<p class="mapline">Map: <strong>${esc(map.name)}</strong> <button type="button" class="quiet" id="map">Change map <kbd>M</kbd></button></p>`
     const button = game.nextLabel() ? `<button type="button" class="next" id="next"${(game.phase === 'lobby' || (game.phase === 'results' && !game.everyoneHunted())) && !game.canStart() ? ' disabled' : ''}>${esc(game.nextLabel())} <kbd>Enter</kbd></button>` : ''
@@ -320,22 +385,18 @@
         `<h2>${game.phase === 'over' ? 'Final scores' : `Round ${game.round} over`}</h2>` +
         (game.phase === 'results' ? `<p class="why">${why}</p>` : '') +
         `<table class="board"><thead><tr><th scope="col">#</th><th scope="col">Player</th>${game.phase === 'results' ? '<th scope="col" class="num">Round</th>' : ''}<th scope="col" class="num">Total</th><th scope="col"><span class="sr">Remove</span></th></tr></thead><tbody>${rows}</tbody></table>` +
-        button + mapLine + status +
+        button + mapLine + joinLine + status +
         `<p class="keys">Room ${roomCode}${game.phase === 'results' ? ' · G final scores now' : ''} · Q hides this panel</p>`
     } else {
-      const url = net.joinUrl(roomCode, secret)
-      const qr = qrcode(0, 'M')
-      qr.addData(url)
-      qr.make()
       const inRound = game.phase === 'round'
       // Mid-round the panel shows no names: a list changing as people join or drop could hint at who is who.
       const list = inRound ? '' : '<ul>' + [...players.values()].sort((a, b) => a.order - b.order)
         .map(p => `<li${p.conn ? '' : ' class="away"'}><span class="nm">${esc(p.name)}${p.conn ? via(p.conn) : ' (away)'}</span>${kickButton(p)}</li>`).join('') + '</ul>'
       lobby.innerHTML =
         `<h2>Join on your phone</h2>` +
-        `<img class="qr" alt="QR code to join room ${roomCode}" src="${qr.createDataURL(8, 2)}">` +
+        `<img class="qr" alt="QR code to join room ${roomCode}" src="${joinQrSrc()}">` +
         `<p class="url">or go to <strong>${esc(siteAddress())}</strong> and enter</p>` +
-        `<p class="code" aria-label="Room code ${roomCode.split('').join(' ')}">${roomCode}</p>` +
+        `<p class="code" aria-label="Room code ${roomCode.split('').join(' ')}">${roomCode}</p>` + joinLine +
         `<h3>${players.size} ${players.size === 1 ? 'player' : 'players'}</h3>${list}` +
         (inRound ? '' : button + mapLine) + status +
         `<p class="keys">Q hides this panel · N starts a new room${joinRoute ? ` · join server: ${joinRoute === 'proxy' ? location.hostname : joinRoute === 'cloud' ? '0.peerjs.com' : 'local test'}` : ''}${mqttOnline ? ' · relay ready' : ''}</p>`
@@ -345,6 +406,8 @@
     if (btn) btn.addEventListener('click', nextStep)
     const mb = document.getElementById('map')
     if (mb) mb.addEventListener('click', nextMap)
+    const jb = document.getElementById('joinview')
+    if (jb) jb.addEventListener('click', () => setJoinView(true))
   }
 
   // ---- The game survives a reload of this page ----
@@ -373,6 +436,9 @@
   }
 
   if (!demo) {
+    // Before round 1 the TV's only job is getting people in, so the big join view opens by itself.
+    // Enter still starts the round from it; J or Esc shows the room and the panel (map, kicks).
+    joinOpen = game.phase === 'lobby' && game.round === 0
     renderLobby()
     useCode(net.store.get('host-code') || net.makeCode())
     startHost()
@@ -501,6 +567,43 @@
     ctx.fillText(text, x, y - 2)
   }
 
+  // End of round: a name over every player's blob. A tag that would overlap another is moved to
+  // the nearest free spot (sideways first, then a row up, or below the blob at the top of the
+  // room), with a line back to its blob.
+  function nameTags (list) {
+    ctx.font = '600 20px system-ui, sans-serif'
+    const placed = []
+    const hits = (r) => placed.some(q => r.x < q.x + q.w + 4 && q.x < r.x + r.w + 4 && r.y < q.y + q.h + 2 && q.y < r.y + r.h + 2)
+    for (const p of [...list].sort((a, b) => a.blob.y - b.blob.y)) {
+      const bx = p.blob.x, by = p.blob.y
+      const w = ctx.measureText(p.name).width + 16
+      const home = by - sim.BLOB_R - 40
+      const spots = []
+      for (let row = 0; row < 8; row++) {
+        for (const dir of [-1, 1]) {                   // rows above the blob, then rows below it
+          const y = dir < 0 ? home - row * 30 : by + sim.BLOB_R + 30 + row * 30
+          if (y < 20 || y > sim.H - 15) continue
+          for (let k = 0; k <= 3; k++) for (const side of k ? [-1, 1] : [0]) {
+            const x = Math.min(Math.max(bx + side * k * (w * 0.6), w / 2 + 4), sim.W - w / 2 - 4)
+            spots.push({ x, y, cost: Math.hypot(x - bx, y - home) + (dir > 0 ? 60 : 0) })
+          }
+        }
+      }
+      spots.sort((a, b) => a.cost - b.cost)
+      const spot = spots.find(sp => !hits({ x: sp.x - w / 2, y: sp.y - 15, w, h: 26 })) || { x: bx, y: home }
+      placed.push({ x: spot.x - w / 2, y: spot.y - 15, w, h: 26, tx: spot.x, ty: spot.y, bx, by, text: p.name })
+    }
+    for (const t of placed) {
+      if (Math.abs(t.ty - (t.by - sim.BLOB_R - 40)) > 1 || Math.abs(t.tx - t.bx) > 1) {   // moved: a line shows which blob it belongs to
+        ctx.strokeStyle = C.blob; ctx.lineWidth = 1.5
+        ctx.beginPath(); ctx.moveTo(t.bx, t.by + (t.ty > t.by ? sim.BLOB_R : -sim.BLOB_R)); ctx.lineTo(t.tx, t.ty + (t.ty > t.by ? -15 : 11)); ctx.stroke()
+      }
+    }
+    for (const t of placed) tag(t.tx, t.ty, t.text)
+    lastTags = placed
+  }
+  let lastTags = []
+
   // The Hunter's selection: a crosshair everyone can see on the TV.
   function drawAim (b, alpha) {
     const x = b.px + (b.x - b.px) * alpha
@@ -546,12 +649,13 @@
     tag(n.x, n.y - n.r - 18, `Net · ${Math.ceil(left)} s`)
   }
 
-  // A shot: a ring that spreads out, and what it hit.
+  // A shot: a ring that spreads out, and what it hit. With reduced motion the ring doesn't
+  // grow or fade: it stands at its full size for the same time, then goes.
   function drawShot (shot) {
     const age = world.time - shot.at
     if (age > 2.5) return
-    const r = 24 + Math.min(age, 0.6) * 120
-    ctx.strokeStyle = C.aim; ctx.lineWidth = 4; ctx.globalAlpha = Math.max(0, 1 - age / 2.5)
+    const r = reduceMotion ? 96 : 24 + Math.min(age, 0.6) * 120
+    ctx.strokeStyle = C.aim; ctx.lineWidth = 4; ctx.globalAlpha = reduceMotion ? 1 : Math.max(0, 1 - age / 2.5)
     ctx.beginPath(); ctx.arc(shot.x, shot.y, r, 0, Math.PI * 2); ctx.stroke()
     ctx.globalAlpha = 1
     if (shot.kind === 'caught') tag(shot.x, shot.y - sim.BLOB_R - 40, `Caught: ${shot.name}`)
@@ -604,7 +708,7 @@
       if (game.aim && game.phase === 'round') drawAim(game.aim, alpha)
       if (game.phase === 'round') for (const shot of game.shotsFired) drawShot(shot)   // after the round, the name tags take over
       // End of round: everyone sees who was who.
-      if (ended) for (const p of players.values()) if (!p.blob.hidden) tag(p.blob.x, p.blob.y - sim.BLOB_R - 40, p.name)
+      if (ended) nameTags([...players.values()].filter(p => !p.blob.hidden))
     }
 
     // HUD, in screen pixels
@@ -643,7 +747,7 @@
       ctx.textAlign = 'center'
       ctx.textBaseline = 'bottom'
       ctx.fillText(game
-        ? 'Enter start / next · E end round · M map · Space pause · F full screen · Q panel · H hide this line'
+        ? 'Enter start / next · E end round · M map · Space pause · F full screen · Q panel · J join screen · H hide this line'
         : 'Space pause · R reveal humans (testing only) · M map · F full screen · H hide this line', cw / 2, ch - 4)
     }
   }
@@ -656,6 +760,8 @@
     else if (k === 'h') showHelp = !showHelp
     else if (k === 'm') nextMap()
     else if (k === 'q' && lobby) lobby.hidden = !lobby.hidden
+    else if (k === 'j' && joinView) setJoinView(!joinOpen)
+    else if (k === 'escape' && joinOpen) setJoinView(false)
     else if (k === 'enter' && game && e.target.tagName !== 'BUTTON') nextStep()
     else if (k === 'e' && game && game.phase === 'round' && confirm('End this round now?')) { game.endRound(); broadcast() }
     else if (k === 'g' && game && game.phase === 'results') { game.finish(); broadcast() }
@@ -667,6 +773,6 @@
   })
 
   if (game) window.addEventListener('pagehide', saveSnapshot)   // the latest state, just in case
-  window.__actNatural = { world, players, game }   // for automated tests
+  window.__actNatural = { world, players, game, nameTags: () => lastTags }   // for automated tests
   requestAnimationFrame(frame)
 })()
