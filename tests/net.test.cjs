@@ -27,7 +27,7 @@ const S = process.argv[2] || require('path').join(__dirname, 'out'); const base 
   const pos = await g(i => { const x = window.__actNatural.world.blobs.find(z => z.id === i); return { x: x.x / 1600, y: x.y / 900 } }, setup.bo)
   const r = await A.$eval('#hmap', e => { const q = e.getBoundingClientRect(); return { x: q.left, y: q.top, w: q.width, h: q.height } })
   let aimed = false
-  for (let t = 0; t < 6 && !aimed; t++) { await A.dispatchEvent('#hmap', 'pointerdown', { clientX: r.x + pos.x * r.w, clientY: r.y + pos.y * r.h, pointerId: 7, isPrimary: true }); await A.waitForTimeout(250); aimed = await g(() => !!window.__actNatural.game.aim) }
+  for (let t = 0; t < 6 && !aimed; t++) { const ev = { clientX: r.x + pos.x * r.w, clientY: r.y + pos.y * r.h, pointerId: 7, isPrimary: true }; await A.dispatchEvent('#hmap', 'pointerdown', ev); await A.dispatchEvent('#hmap', 'pointerup', ev); await A.waitForTimeout(250); aimed = await g(() => !!window.__actNatural.game.aim) }
   console.log('aimed:', aimed, '| net button:', await txt(A, '#net'), 'enabled', await A.$eval('#net', e => !e.disabled))
   await A.click('#net'); await A.waitForTimeout(400)
   const held = await g(() => window.__actNatural.world.blobs.filter(x => x.heldUntil > window.__actNatural.world.time).map(x => x.id))
