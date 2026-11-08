@@ -208,6 +208,7 @@
       if (ev.type === 'caught') { sendYou(ev.player); send(p.conn, { t: 'event', kind: 'caught', name: ev.player.name }) }
       else send(p.conn, { t: 'event', kind: 'bot' })
       if (game.phase !== 'round') broadcast(); else sendYou(p)
+      saveSnapshot()   // a catch scores for the Hunter
       return
     }
     if (msg.t === 'in') {
@@ -229,7 +230,7 @@
     map = list[(list.indexOf(map) + 1) % list.length]
     sim.setMap(map)
     net.store.set('map', map.id)
-    if (game) broadcast()
+    if (game) { broadcast(); saveSnapshot() }
   }
 
   function broadcast () {
@@ -309,9 +310,9 @@
     }
     const status = netStatus === 'open' ? '' : `<p class="status">${esc(netStatus)}</p>`
     const mapLine = game.phase === 'round' ? '' : `<p class="mapline">Map: <strong>${esc(map.name)}</strong> <button type="button" class="quiet" id="map">Change map <kbd>M</kbd></button></p>`
-    const button = game.nextLabel() ? `<button type="button" class="next" id="next"${game.phase === 'lobby' && !game.canStart() ? ' disabled' : ''}>${esc(game.nextLabel())} <kbd>Enter</kbd></button>` : ''
+    const button = game.nextLabel() ? `<button type="button" class="next" id="next"${(game.phase === 'lobby' || (game.phase === 'results' && !game.everyoneHunted())) && !game.canStart() ? ' disabled' : ''}>${esc(game.nextLabel())} <kbd>Enter</kbd></button>` : ''
     if (game.phase === 'results' || game.phase === 'over') {
-      const why = { time: 'Time\'s up.', 'all-caught': 'The Hunter caught everyone still in.', 'all-done': 'Everyone still in finished their landmarks.', stopped: 'Stopped by the host.' }[game.endReason] || ''
+      const why = { time: 'Time\'s up.', 'all-caught': 'The Hunter caught everyone still in.', 'all-done': 'Everyone still in finished their landmarks.', stopped: 'Stopped by the host.', reload: 'The TV was reloaded, so this round ended there. Points already scored are kept.' }[game.endReason] || ''
       const rows = game.scoreboard().map((p, i) =>
         `<tr><td>${i + 1}</td><td>${esc(p.name)}${p === game.hunter ? ' <span class="tag">Hunter</span>' : p.caught ? ' <span class="tag">caught</span>' : ''}</td>` +
         (game.phase === 'results' ? `<td class="num">+${p.roundPts}</td>` : '') + `<td class="num">${p.score}</td><td>${kickButton(p)}</td></tr>`).join('')
@@ -344,6 +345,31 @@
     if (btn) btn.addEventListener('click', nextStep)
     const mb = document.getElementById('map')
     if (mb) mb.addEventListener('click', nextMap)
+  }
+
+  // ---- The game survives a reload of this page ----
+  // Scores, the round number, who has hunted, kicks and who is in are kept in this browser
+  // (the map, room code and relay secret already are). A snapshot belongs to one room: it is
+  // only used if the room code is still the same (N, a new room, starts clean), and only if it
+  // is less than 6 hours old, so next week's party doesn't open on last week's scores. Within a
+  // session, "New game" after the final scores resets scores and Hunters as before (and saves that).
+  // Phones come back on their own with their tokens and get their records back (round.js restore).
+  const SNAPSHOT_MAX_AGE = 6 * 60 * 60 * 1000
+  function loadSnapshot () {
+    try {
+      const s = JSON.parse(net.store.get('game') || 'null')
+      if (!s || s.code !== net.store.get('host-code') || !(Date.now() - s.at < SNAPSHOT_MAX_AGE)) return null
+      return s.game
+    } catch (e) { return null }
+  }
+  function saveSnapshot () {
+    if (!game || !code) return
+    try { net.store.set('game', JSON.stringify({ code, at: Date.now(), game: game.snapshot() })) } catch (e) { /* no storage: the game just won't survive a reload */ }
+  }
+  if (game) {
+    const snap = loadSnapshot()
+    if (snap) game.restore(snap)
+    game.onChange = saveSnapshot
   }
 
   if (!demo) {
@@ -640,6 +666,7 @@
     }
   })
 
+  if (game) window.addEventListener('pagehide', saveSnapshot)   // the latest state, just in case
   window.__actNatural = { world, players, game }   // for automated tests
   requestAnimationFrame(frame)
 })()

@@ -17,6 +17,7 @@ Owner hints:
 - **Mid-round joins** no longer reshuffle the Hunter's blob numbers (review problem 2).
 - **Early end:** a round ends when every hider still in has finished all three landmarks.
 - **Maps:** Ålesund now has Aspøy skole and Jugendstilsenteret (instead of Aspøya and Aksla), checked against written sources; East Oslo has Grorud T, Haugenstua Lampa and Rommen Hindu Temple. A bug that removed Ålesund's drawings is fixed.
+- **TV reload keeps the game** (review problem 4): scores, round, who has hunted, kicks and the map survive a reload of the TV; a round running at the reload ends there with its points kept. Phones rejoin on their own (no connection code changed).
 - **Moved to its own repo**, served at `play.nithun.no/act-natural/` (once the server is set up).
 
 ## Open problems from the review
@@ -25,7 +26,6 @@ Owner hints:
 |---|---|---|
 | 1 | **High** | **Neither fallback relay is switched on.** Players whose network blocks direct links (the Safari group at the workshop) can't join until coturn and/or Mosquitto run on the server and `TURN_SECRET` is set. |
 | 3 | Medium | **"Everyone caught" counts players who have left**, so a dropped-out hider keeps the round running until the clock ends. |
-| 4 | Medium | **Reloading the TV loses the game:** scores, round, who has hunted, and kicks. |
 | 5 | Medium | **Aiming is fiddly on small phones:** small dots, nearest-within-36-px selection, no zoom. |
 | 6 | Medium | **Canopies hide blobs** (park tree, Jaffna palm). Could be a feature, but isn't designed as one. |
 | 7 | Medium | **No collision:** blobs walk through each other and through buildings and water. Players asked for it. |
@@ -58,7 +58,6 @@ Owner hints:
 |---|---|---|---|---|
 | Map effects and character variety from the design canvas | More depth and variety per map | M–L | Claude | Nithun's picks on the canvas |
 | Collision, part 2: solid landmarks | Makes maps feel physical | M | Claude | part 1 |
-| TV state survives a reload (`localStorage`) | Most likely accident at a live session | M | Claude; Hary checks the reconnect path | none |
 | Easier aiming (hold to zoom, or step through nearby blobs) | Mis-taps waste shots | S–M | Claude | none |
 | Full-screen join view (big QR code) | Easier for big groups | S | Claude | none |
 | Confirm landmarks and drawings with Nithun | Real places with personal meaning | S | Nithun + Claude | Nithun's input |

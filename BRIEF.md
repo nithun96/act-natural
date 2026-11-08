@@ -40,7 +40,8 @@ It will live at `nithun.no/lab/act-natural/`. It won't be linked from the site a
   - Phone → host: `join {name, token}` once, and `in {dx, dy}` 15 times a second while the stick is moved, plus one zero when it's released. The host stops a blob if it hears nothing for 500 ms.
   - Hunter → host: `shoot {x, y}` in world coordinates.
   - Host → each phone: `you {role, task, progress, score, phase, timeLeft}` when something changes, plus your own position (or every blob, for the Hunter) 10 times a second.
-- **Reconnect:** a token in localStorage, so a phone that reloads gets the same player back. Persisting the host's own state between reloads isn't needed in v1.
+- **Reconnect:** a token in localStorage, so a phone that reloads gets the same player back.
+- **TV reload (Nov 2026):** the TV keeps a small snapshot in localStorage (players, scores, round number, who has hunted, kicks; the map, room code and relay secret were already kept), saved when any of those change. It is used only for the same room code and if under 6 hours old; N (new room) starts clean. A round running at the reload can't be resumed (blob positions and timers aren't saved), so it ends there: the TV shows that round's results with the points already scored kept, its Hunter counts as having hunted, and the host presses Enter for the next round.
 - **Hit test:** done on the host using the position the Hunter's phone saw. A generous radius covers latency; no rewinding.
 - **Phone UI:** a map at the top showing only your own dot and your next landmark (always visible: decided 07.11.2026 after testing, replacing hold-to-show), the task list, a joystick area below, plus the Wake Lock API to keep the screen on.
 - **Tasks (as built, step 3):** "within range" means within 100 world units of the landmark's centre; the 1.5 s count starts again if you leave the range. Moving inside the range is allowed.

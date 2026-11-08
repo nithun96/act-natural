@@ -34,7 +34,9 @@
       aim: null,                // the blob the Hunter has selected
       shotsFired: [],           // { x, y, kind: 'caught' | 'bot', name, at } for the TV
       endReason: null,
+      onChange: null,           // the TV sets this to save a snapshot (scores, kicks…) when they change
     }
+    const changed = () => { if (g.onChange) g.onChange() }
 
     const ordered = () => [...g.players.values()].sort((a, b) => a.order - b.order)
     const online = () => ordered().filter(p => p.conn)
@@ -51,13 +53,14 @@
         g.players.set(token, p)
       }
       p.name = name
+      changed()
       return p
     }
 
     g.canStart = () => online().length >= 2
 
     // The host removes a player (between rounds only). Their blob leaves the room and the
-    // phone can't join again until the TV page is reloaded.
+    // phone can't join again in this room (kicks survive a TV reload; a new room clears them).
     g.kick = (token) => {
       const p = g.players.get(token)
       if (!p || g.phase === 'round') return null
@@ -66,6 +69,7 @@
       g.kicked.add(token)
       world.blobs = world.blobs.filter(b => b !== p.blob)
       if (g.hunter === p) g.hunter = null
+      changed()
       return p
     }
 
@@ -99,6 +103,7 @@
       releaseNet()
       g.netUsed = false
       g.phase = 'round'
+      changed()
       return true
     }
 
@@ -135,23 +140,25 @@
       g.lockLeft = 0
       releaseNet()
       for (const p of g.players.values()) if (p.task) p.task.hold = 0
+      changed()
     }
     g.endRound = () => { if (g.phase === 'round') endRound('stopped') }
 
-    // Every player online has been the Hunter: the game is over after this round.
-    g.everyoneHunted = () => online().every(p => g.hunted.has(p.token))
+    // Every player online has been the Hunter: the game is over after this round. Nobody online
+    // (e.g. just after the TV reloaded, before the phones are back) doesn't count as everyone.
+    g.everyoneHunted = () => { const list = online(); return list.length > 0 && list.every(p => g.hunted.has(p.token)) }
 
     // The host's one button: start, next round, final scores, new game.
     g.next = () => {
       if (g.phase === 'lobby') return g.startRound()
       if (g.phase === 'results') {
-        if (g.everyoneHunted()) { g.phase = 'over'; g.hunter = null; return true }
+        if (g.everyoneHunted()) { g.phase = 'over'; g.hunter = null; changed(); return true }
         return g.startRound()
       }
       if (g.phase === 'over') { g.newGame(); return true }
       return false
     }
-    g.finish = () => { if (g.phase === 'results') { g.phase = 'over'; g.hunter = null } }
+    g.finish = () => { if (g.phase === 'results') { g.phase = 'over'; g.hunter = null; changed() } }
 
     g.newGame = () => {
       for (const p of g.players.values()) { p.score = 0; p.roundPts = 0; p.caught = false; p.task = null }
@@ -160,11 +167,12 @@
       g.hunter = null
       g.phase = 'lobby'
       sim.resetRoom(world)
+      changed()
     }
 
     g.nextLabel = () => {
       if (g.phase === 'lobby') return g.canStart() ? 'Start round 1' : 'Waiting for 2 players'
-      if (g.phase === 'results') return g.everyoneHunted() ? 'Final scores' : `Start round ${g.round + 1}`
+      if (g.phase === 'results') return g.everyoneHunted() ? 'Final scores' : g.canStart() ? `Start round ${g.round + 1}` : 'Waiting for 2 players'
       if (g.phase === 'over') return 'New game'
       return ''
     }
@@ -195,7 +203,7 @@
         if (p.caught) continue
         if (heldNow(p.blob)) { if (p.task) p.task.hold = 0; continue }   // held: no task progress
         const pts = sim.stepTask(p.task, p.blob, dt)
-        if (pts) { p.score += pts; p.roundPts += pts; events.push({ type: 'task', player: p }) }
+        if (pts) { p.score += pts; p.roundPts += pts; events.push({ type: 'task', player: p }); changed() }
       }
       // How long each hider has been disconnected, so a short drop-out (a reload, a network
       // switch) doesn't end the round, but a phone that has left doesn't hold it up either.
@@ -373,6 +381,49 @@
     }
 
     g.scoreboard = () => [...g.players.values()].sort((a, b) => b.score - a.score || a.order - b.order)
+
+    // ---- Surviving a TV reload ----
+    // A small, plain snapshot of the game: who is in, scores, who has hunted, kicks, the round.
+    // Nothing about blobs, positions or timers: those can't be carried over sensibly.
+    g.snapshot = () => ({
+      v: 1,
+      phase: g.phase,
+      round: g.round,
+      endReason: g.endReason,
+      hunter: g.hunter ? g.hunter.token : null,
+      hunted: [...g.hunted],
+      kicked: [...g.kicked],
+      players: ordered().map(p => ({ token: p.token, name: p.name, order: p.order, score: p.score, roundPts: p.roundPts, caught: p.caught })),
+    })
+
+    // Back from a snapshot, on a fresh TV page. Players come back known but offline (no link):
+    // a phone that rejoins with its token gets its record. A round that was running when the TV
+    // reloaded can't be resumed (the blobs and the clock are gone), so it ends there: the room
+    // shows that round's results, with the points already scored kept, and the host presses Next.
+    // That round's Hunter counts as having hunted.
+    g.restore = (s) => {
+      if (!s || s.v !== 1 || !Array.isArray(s.players)) return false
+      const str = (x, n) => String(x == null ? '' : x).slice(0, n)
+      const num = x => (Number.isFinite(Number(x)) ? Math.max(0, Math.round(Number(x))) : 0)
+      for (const q of s.players.slice(0, MAX_PLAYERS)) {
+        const token = str(q && q.token, 64)
+        const name = str(q && q.name, 20)
+        if (!token || !name || g.players.has(token)) continue
+        g.players.set(token, { token, name, blob: sim.addHuman(world), conn: null, order: num(q.order), score: num(q.score), roundPts: num(q.roundPts), caught: !!q.caught, task: null })
+      }
+      for (const t of Array.isArray(s.kicked) ? s.kicked : []) g.kicked.add(str(t, 64))
+      for (const t of Array.isArray(s.hunted) ? s.hunted : []) if (g.players.has(str(t, 64))) g.hunted.add(str(t, 64))
+      g.round = num(s.round)
+      if (g.round === 0 || s.phase === 'lobby') {
+        g.phase = 'lobby'
+      } else {
+        g.phase = s.phase === 'over' ? 'over' : 'results'
+        g.endReason = s.phase === 'round' ? 'reload' : s.endReason ? str(s.endReason, 20) : null
+        g.hunter = g.phase === 'results' ? g.players.get(str(s.hunter, 64)) || null : null
+        if (g.hunter) g.hunter.blob.hidden = true      // as at the end of a round: the Hunter has no blob
+      }
+      return true
+    }
 
     return g
   }
