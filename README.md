@@ -57,7 +57,7 @@ npx playwright install chromium
 npm test
 ```
 
-This builds the game, starts the game and a local PeerJS server, and runs every `tests/*.test.cjs`: joining, rounds, the Hunter, the net, kicking, reloads, maps, the early end. Screenshots go to `tests/out/`.
+This builds the game, starts the game and a local PeerJS server, and runs every `tests/*.test.cjs`: joining, rounds, the Hunter, the net, kicking, reloads (phone and TV, with scores kept), maps, the early end. Screenshots go to `tests/out/`.
 
 ## Deploy
 

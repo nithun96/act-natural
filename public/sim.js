@@ -198,6 +198,69 @@
         b.walkPhase += dt * 9
       }
     }
+    separate(world)
+  }
+
+  // ---- Soft separation: blobs bump instead of walking through each other ----
+  // After everyone has moved, each overlapping pair is pushed apart along the line between
+  // their centres, half the overlap each. One pass a step is enough: what is left over is
+  // sorted out over the next few steps, so crowds squash and ease apart rather than snap.
+  // Nothing here looks at a blob's kind, and world.blobs is in random order (insertRandom),
+  // so bots and humans are pushed exactly alike. Hard blocking is deliberately not used:
+  // bots would stall face to face where a person steers round (ROADMAP, "Collision").
+  //
+  // Who takes part:
+  // - Hidden blobs (the Hunter's own) are not in the room at all: never solid.
+  // - Shot bots (gone) are not solid. They are already marked "bot" for everyone to see and
+  //   leave a moment later, so letting others pass through them hides nothing, and it saves a
+  //   crowd being shoved about by a blob that is about to vanish.
+  // - Caught humans (out) stay solid and pushable, like a bot standing still, so no gap in
+  //   the crowd and no "walk-through" marks them.
+  // - Blobs held by the net (heldUntil) are solid but pinned: others are pushed off them by
+  //   the full overlap and they don't budge, and two held blobs leave each other alone. The
+  //   net holds bots and humans alike, so this can't tell them apart either way; pinning keeps
+  //   the net's promise that everything under it stands perfectly still until released.
+  const SEP_DIST = BLOB_R * 2
+  const solid = b => !b.hidden && !b.gone
+  const pinned = (b, t) => !!b.heldUntil && b.heldUntil > t
+
+  function separate (world) {
+    const blobs = world.blobs
+    const t = world.time
+    const n = blobs.length
+    for (let i = 0; i < n; i++) {
+      const a = blobs[i]
+      if (!solid(a)) continue
+      const pa = pinned(a, t)
+      for (let j = i + 1; j < n; j++) {
+        const b = blobs[j]
+        if (!solid(b)) continue
+        let dx = b.x - a.x
+        let dy = b.y - a.y
+        const d2 = dx * dx + dy * dy
+        if (d2 >= SEP_DIST * SEP_DIST) continue
+        const pb = pinned(b, t)
+        if (pa && pb) continue
+        let d = Math.sqrt(d2)
+        const push = SEP_DIST - d
+        if (d < 1e-6) {                 // exactly on top of each other: any direction will do
+          const ang = Math.random() * Math.PI * 2
+          dx = Math.cos(ang); dy = Math.sin(ang); d = 1
+        }
+        const ux = dx / d
+        const uy = dy / d
+        const sa = pa ? 0 : pb ? 1 : 0.5
+        const sb = 1 - sa
+        if (sa) {
+          a.x = clamp(a.x - ux * push * sa, MARGIN, W - MARGIN)
+          a.y = clamp(a.y - uy * push * sa, MARGIN, H - MARGIN)
+        }
+        if (sb) {
+          b.x = clamp(b.x + ux * push * sb, MARGIN, W - MARGIN)
+          b.y = clamp(b.y + uy * push * sb, MARGIN, H - MARGIN)
+        }
+      }
+    }
   }
 
   // ---- Tasks: three landmarks in order. Stay within range for 1.5 s to tick one off ----
@@ -228,6 +291,6 @@
   }
 
   window.ActNatural = Object.assign(window.ActNatural || {}, {
-    sim: { W, H, BLOB_R, SPEED, MARGIN, STICK_DEADZONE, LANDMARKS, setMap, mapId: () => mapId, createWorld, addHuman, resetRoom, topUpBots, step, TASK_RANGE, TASK_HOLD, dealTasks, stepTask, setInput, makeDriver, pickTarget, nearLandmark, rand },
+    sim: { W, H, BLOB_R, SPEED, MARGIN, STICK_DEADZONE, LANDMARKS, setMap, mapId: () => mapId, createWorld, addHuman, resetRoom, topUpBots, step, separate, TASK_RANGE, TASK_HOLD, dealTasks, stepTask, setInput, makeDriver, pickTarget, nearLandmark, rand },
   })
 })()
