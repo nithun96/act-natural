@@ -117,7 +117,10 @@
   .recharge { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
   .recharge span { display: block; height: 100%; width: 0; background: var(--text); transition: width 0.1s linear; }
   .hunt-buttons { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
-  .hunt-buttons .mark { min-height: 64px; font-size: 18px; }
+  .hunt-buttons .mark, .hunt-buttons .net { min-height: 64px; font-size: 18px; }
+  .hunt-buttons .net { grid-column: 1 / -1; min-height: 52px; }
+  .netbanner { flex: none; width: 100%; max-width: 560px; margin: 0 auto; padding: 10px 12px; border: 2px dashed var(--text); border-radius: 8px; text-align: center; font-weight: 700; color: var(--text) !important; }
+  .netbanner[hidden] { display: none; }
 </style>
 </head>
 <body>

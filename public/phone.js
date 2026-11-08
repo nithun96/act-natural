@@ -315,6 +315,7 @@
       const { sim, maps } = window.ActNatural
       if (msg.map && msg.map !== sim.mapId()) { sim.setMap(maps.byId(msg.map)); drawMap(); drawHunt() }
       render()
+      renderHeld()
     } else if (msg.t === 'kicked') {
       showKicked()
     } else if (msg.t === 'full') {
@@ -324,6 +325,7 @@
       myPos = { x: msg.x, y: msg.y }
       me.hold = Number(msg.hold) || 0
       if (msg.tl != null) { me.timeLeft = msg.tl; updateClock() }
+      if (msg.held != null && msg.held !== me.held) { me.held = msg.held; renderHeld() }
       const bar = document.getElementById('holdbar')
       if (bar) bar.style.width = Math.round(me.hold * 100) + '%'
       drawMap()
@@ -338,7 +340,8 @@
     } else if (msg.t === 'event') {
       toast(msg.kind === 'caught' ? `Caught ${msg.name}! +3`
         : msg.kind === 'marks-full' ? 'You can mark 3 suspects at most. Unmark one first.'
-          : 'That was a bot. Shooting is locked for 5 s.')
+          : msg.kind === 'net' ? `Net thrown: everything under it is held for ${window.ActNatural.round.NET_HOLD} s.`
+            : 'That was a bot. Shooting is locked for 5 s.')
     } else if (msg.t === 'pong') {
       const sent = pings.get(msg.id)
       if (sent) { pings.delete(msg.id); rtt = rtt == null ? performance.now() - sent : rtt * 0.7 + (performance.now() - sent) * 0.3 }
@@ -413,6 +416,7 @@
       '<ol id="tasklist"></ol>' +
       '<p class="score"><span id="score">0</span> pts <span class="rtt" id="rtt" aria-label="Delay to the TV"></span></p>' +
       '</section>' +
+      '<p class="netbanner" id="netbanner" role="status" hidden></p>' +
       '<section class="pad" id="pad" aria-label="Joystick: drag anywhere here to walk. Arrow keys also work.">' +
       '<p class="padhint" aria-hidden="true">Drag here to walk</p>' +
       '<div class="base" id="base" hidden><div class="knob" id="knob"></div></div>' +
@@ -517,8 +521,19 @@
   // Input goes out at most 15 times a second while the stick is held. A move is sent at
   // once if the last send was long enough ago, so a thumb never waits for the next tick.
   let lastSent = 0
+  // Held by the Hunter's net: a countdown on the screen, and the stick does nothing until it lifts.
+  function renderHeld () {
+    const el = document.getElementById('netbanner')
+    if (!el) return
+    const n = me.phase === 'round' ? (me.held | 0) : 0
+    el.hidden = n <= 0
+    const text = n > 0 ? `Held by the net: ${n} s` : ''
+    if (el.textContent !== text) el.textContent = text
+  }
+
   function sendStick () {
     if (!joined || !stick.active) return
+    if (me.held > 0) return
     lastSent = performance.now()
     send({ t: 'in', dx: Math.round(stick.dx * 100) / 100, dy: Math.round(stick.dy * 100) / 100 })
   }
@@ -580,9 +595,10 @@
       '<div class="hunt-buttons">' +
       '<button type="button" class="shoot" id="shoot" disabled>Shoot</button>' +
       '<button type="button" class="quiet mark" id="mark" disabled>Mark</button>' +
+      '<button type="button" class="quiet net" id="net" disabled>Throw net</button>' +
       '</div>' +
       '<p class="toast" id="toast" role="status"></p>' +
-      '<p class="hint">Watch the TV. Tap a blob here to aim; everyone sees the crosshair. Mark up to 3 suspects to keep track of them. Arrow keys, Enter (shoot) and M (mark) work too.</p>' +
+      '<p class="hint">Watch the TV. Tap a blob here to aim; everyone sees the crosshair. Mark up to 3 suspects to keep track of them. Once per round, throw a net to hold everything under it for 8 s (nobody is caught). Arrow keys, Enter (shoot), M (mark) and N (net) work too.</p>' +
       '</div>'
     hmapEl = document.getElementById('hmap')
     sizeMap()
@@ -602,6 +618,14 @@
     })
     document.getElementById('shoot').addEventListener('click', shoot)
     document.getElementById('mark').addEventListener('click', markSel)
+    document.getElementById('net').addEventListener('click', throwNet)
+  }
+
+  function throwNet () {
+    if (sel == null || !hunt || !hunt.netReady) return
+    send({ t: 'net', a: sel })
+    const nb = document.getElementById('net')
+    if (nb) nb.disabled = true
   }
 
   const markOf = a => { const m = hunt && hunt.marks && hunt.marks.find(([x]) => x === a); return m ? m[1] : null }
@@ -645,6 +669,12 @@
       const label = lock > 0 ? `Locked for ${lock} s` : 'Shoot'
       if (btn.textContent !== label) btn.textContent = label
     }
+    const nb = document.getElementById('net')
+    if (nb) {
+      nb.disabled = sel == null || !(hunt && hunt.netReady)
+      const label = hunt && !hunt.netReady ? 'Net used' : 'Throw net'
+      if (nb.textContent !== label) nb.textContent = label
+    }
     const mb = document.getElementById('mark')
     if (mb) {
       mb.disabled = sel == null
@@ -668,6 +698,7 @@
     const k = e.key
     if (k === 'Enter' || k === ' ') { e.preventDefault(); shoot(); return }
     if (k === 'm' || k === 'M') { e.preventDefault(); markSel(); return }
+    if (k === 'n' || k === 'N') { e.preventDefault(); throwNet(); return }
     if (k !== 'ArrowLeft' && k !== 'ArrowRight' && k !== 'ArrowUp' && k !== 'ArrowDown') return
     e.preventDefault()
     const live = hunt.b.filter(b => b[3] === 0).sort((p, q) => p[1] - q[1] || p[2] - q[2])
@@ -689,6 +720,16 @@
     c.fillStyle = '#7A7266'
     for (const lm of LM()) c.fillText(lm.name, lm.x / 1600 * w, lm.y / 900 * h + 4 * k)
     if (!hunt) return
+    if (hunt.net) {                           // the net: a dashed circle with its seconds left
+      const nx = hunt.net.x * w, ny = hunt.net.y * h, nr = hunt.net.r / 1600 * w
+      c.fillStyle = 'rgba(232,223,200,0.08)'
+      c.beginPath(); c.arc(nx, ny, nr, 0, Math.PI * 2); c.fill()
+      c.strokeStyle = '#E8DFC8'; c.lineWidth = 1.5 * k; c.setLineDash([3 * k, 3 * k])
+      c.beginPath(); c.arc(nx, ny, nr, 0, Math.PI * 2); c.stroke(); c.setLineDash([])
+      c.fillStyle = '#E8DFC8'; c.textBaseline = 'bottom'; c.font = `bold ${10 * k}px system-ui, sans-serif`
+      c.fillText(`Net ${hunt.net.left} s`, nx, ny - nr - 2 * k)
+      c.textBaseline = 'top'; c.font = `${10 * k}px system-ui, sans-serif`
+    }
     const R = 4.5 * k
     for (const [a, bx, by, st] of hunt.b) {
       const x = bx * w, y = by * h

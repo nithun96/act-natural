@@ -24,6 +24,7 @@ It will live at `nithun.no/lab/act-natural/`. It won't be linked from the site a
 ## Added after the build order (Nov 2026)
 
 - **Maps:** the park, Vietnam (Hoan Kiem Lake, phở stall, Hội An lanterns, rice paddy, motorbike), Jaffna (Nallur Kandaswamy, Casuarina Beach, Jaffna Public Library, palmyra palm, Jaffna Fort) East Oslo (Stovner senter, Haugenstua T, Stovnertårnet, Rommen Hindu Temple, Haugenstua Lampa) and Ålesund (Brosundet, Steinvågen, Aksla, Aspøya, Skarbøvika). The host picks one between rounds (M). Landmark choices were Claude's proposal, not yet confirmed by Nithun.
+- **Net (08.11.2026):** once per round the Hunter throws a net (radius 130 units) over a blob. Everything inside at that moment, bots and humans alike, is held still for 8 s; hiders under it lose their landmark progress. It catches nobody and reveals nothing; each held blob is released 0.05–0.3 s after the net lifts, the same for bots and humans.
 - **Early end:** a round also ends when every hider still in has finished all three landmarks (since 08.11.2026; before, the Hunter also had to be out of shots).
 
 ## Architecture
