@@ -15,6 +15,7 @@
   const CATCH_POINTS = 3
   const MAX_PLAYERS = 20
   const BOT_REVEAL_TIME = 1.5  // a shot bot shows "bot" this long, then leaves the room
+  const AWAY_GRACE = 10        // seconds a hider can be disconnected and still count as in the round
 
   function create (world) {
     const g = {
@@ -81,6 +82,7 @@
       for (const p of g.players.values()) {
         p.roundPts = 0
         p.caught = false
+        p.awaySince = null
         p.task = p === h ? null : sim.dealTasks()
       }
       h.blob.hidden = true                // the Hunter has no blob
@@ -195,17 +197,31 @@
         const pts = sim.stepTask(p.task, p.blob, dt)
         if (pts) { p.score += pts; p.roundPts += pts; events.push({ type: 'task', player: p }) }
       }
+      // How long each hider has been disconnected, so a short drop-out (a reload, a network
+      // switch) doesn't end the round, but a phone that has left doesn't hold it up either.
+      for (const p of hiders()) {
+        if (p.conn) p.awaySince = null
+        else if (p.awaySince == null) p.awaySince = world.time
+      }
       if (g.timeLeft <= 0) { g.timeLeft = 0; endRound('time'); events.push({ type: 'end' }) }
-      else if (nothingLeft()) { endRound('all-done'); events.push({ type: 'end' }) }
+      else {
+        const reason = endedEarly()
+        if (reason) { endRound(reason); events.push({ type: 'end' }) }
+      }
       return events
     }
 
-    // Nothing left to play for: every hider still in (and still connected) has finished all three
-    // landmarks. Then the round ends instead of waiting out the clock. (Shots now come back over time,
-    // so running out of them no longer matters.) A phone that has dropped out doesn't hold the round up.
-    function nothingLeft () {
-      const still = hiders().filter(p => !p.caught && p.conn)
-      return still.length > 0 && still.every(p => p.task && p.task.done >= p.task.tasks.length)
+    // Hiders who still count: not caught, and connected or only just dropped out.
+    const stillIn = () => hiders().filter(p => !p.caught && (p.conn || p.awaySince == null || world.time - p.awaySince < AWAY_GRACE))
+
+    // Why the round should end before the clock, or null. 'all-caught': the Hunter has caught at
+    // least one hider and nobody else still counts (players who have left don't keep it running).
+    // 'all-done': every hider who still counts has finished all three landmarks. (Shots now come
+    // back over time, so running out of them no longer matters.)
+    function endedEarly () {
+      const still = stillIn()
+      if (still.length === 0) return hiders().some(p => p.caught) ? 'all-caught' : null
+      return still.every(p => p.task && p.task.done >= p.task.tasks.length) ? 'all-done' : null
     }
 
     // Removing a bot must not shuffle what the Hunter is looking at mid-aim: keep aliases, drop the gone ones.
@@ -294,8 +310,8 @@
         g.lockLeft = MISS_LOCK
         ev = { type: 'bot' }
       }
-      if (hiders().every(q => q.caught)) endRound('all-caught')
-      else if (nothingLeft()) endRound('all-done')
+      const reason = endedEarly()
+      if (reason) endRound(reason)
       return ev
     }
 
@@ -362,6 +378,6 @@
   }
 
   window.ActNatural = Object.assign(window.ActNatural || {}, {
-    round: { create, ROUND_TIME, START_SHOTS, MAX_SHOTS, SHOT_RECHARGE, MISS_LOCK, NET_RADIUS, NET_HOLD, MAX_MARKS, CATCH_POINTS, MAX_PLAYERS },
+    round: { create, AWAY_GRACE, ROUND_TIME, START_SHOTS, MAX_SHOTS, SHOT_RECHARGE, MISS_LOCK, NET_RADIUS, NET_HOLD, MAX_MARKS, CATCH_POINTS, MAX_PLAYERS },
   })
 })()
