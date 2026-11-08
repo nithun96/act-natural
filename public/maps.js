@@ -67,11 +67,11 @@
       name: 'Ålesund',
       colours: { floor: '#1B2125', floorLine: '#252C31', wall: '#38424A' },
       landmarks: [
-        at('centre', { id: 'brosundet', name: 'Brosundet', kind: 'canal', below: 84 }),
-        at('tl', { id: 'steinvagen', name: 'Steinvågen', kind: 'harbour', below: 92 }),
+        at('centre', { id: 'brosundet', name: 'Brosundet', kind: 'canal', below: 112 }),
+        at('tl', { id: 'steinvagen', name: 'Steinvågen', kind: 'harbour', below: 82 }),
         at('tr', { id: 'jugendstil', name: 'Jugendstilsenteret', kind: 'jugendcentre', below: 66 }),
         at('br', { id: 'aspoyskole', name: 'Aspøy skole', kind: 'school', below: 66 }),
-        at('bl', { id: 'skarbovika', name: 'Skarbøvika', kind: 'cove', below: 108 }),
+        at('bl', { id: 'skarbovika', name: 'Skarbøvika', kind: 'cove', below: 82 }),
       ],
     },
   ]
