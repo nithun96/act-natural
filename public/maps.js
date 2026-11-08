@@ -58,8 +58,8 @@
         at('centre', { id: 'senter', name: 'Stovner senter', kind: 'senter', below: 82 }),
         at('tl', { id: 'haugenstua', name: 'Haugenstua T', kind: 'tbane', below: 62 }),
         at('tr', { id: 'tarnet', name: 'Stovnertårnet', kind: 'tower', below: 96 }),
-        at('br', { id: 'pitch', name: 'Football pitch', kind: 'pitch', below: 96 }),
-        at('bl', { id: 'blocks', name: 'The blocks', kind: 'blocks', below: 78 }),
+        at('br', { id: 'rommen', name: 'Rommen Hindu Temple', kind: 'kovil', below: 82 }),
+        at('bl', { id: 'lampa', name: 'Haugenstua Lampa', kind: 'lampa', below: 104 }),
       ],
     },
     {

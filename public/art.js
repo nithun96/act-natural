@@ -159,70 +159,25 @@
       ctx.beginPath(); ctx.arc(x, y, 62, 0, Math.PI * 2); ctx.strokeStyle = '#7A5E44'; ctx.lineWidth = 2; ctx.stroke()
       for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; circle(x + Math.cos(a) * 62, y + Math.sin(a) * 62, 4, '#5A4632') }
     },
-    pitch ({ x, y }) {                          // a football pitch on artificial grass
-      box(x - 115, y - 72, 230, 144, 4, '#3F6B3F')
-      ctx.strokeStyle = 'rgba(232,223,200,0.8)'; ctx.lineWidth = 3
-      ctx.strokeRect(x - 105, y - 62, 210, 124)
-      line([[x, y - 62], [x, y + 62]], 'rgba(232,223,200,0.8)', 3)
-      ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI * 2); ctx.stroke()
-      ctx.strokeRect(x - 105, y - 22, 18, 44); ctx.strokeRect(x + 87, y - 22, 18, 44)
+    lampa ({ x, y }, t) {                       // Haugenstua Lampa: a tall street lamp with a wide warm glow
+      const pulse = reduceMotion ? 1 : 1 + Math.sin(t * 1.5) * 0.04
+      for (const [r, a] of [[118, 0.06], [88, 0.08], [58, 0.10], [32, 0.14]]) circle(x, y, r * pulse, `rgba(240,210,140,${a})`)
+      circle(x + 4, y + 6, 10, K.shadow)
+      circle(x, y, 9, '#2E3136')                // post seen from above
+      line([[x, y], [x + 24, y - 12]], '#2E3136', 5)   // arm
+      ellipse(x + 30, y - 15, 15, 10, '#3A3E44')
+      ellipse(x + 30, y - 15, 10, 6, '#F6DE9C')        // lamp head
     },
-    blocks ({ x, y }) {                         // a block of flats, some windows lit
-      box(x - 105, y - 58, 210, 116, 4, '#4A4E55')
-      let n = 0
-      for (let r = 0; r < 5; r++) for (let c = 0; c < 9; c++) {
-        n = (n * 7 + 3) % 11
-        box(x - 95 + c * 22, y - 50 + r * 21, 13, 12, 1, n < 4 ? '#F0D28C' : '#2E3136')
-      }
-    },
-
-    // ---- Ålesund ----
-    canal ({ x, y }, t) {                       // Brosundet: a narrow canal between stone quays, boats moored
-      box(x - 140, y - 46, 280, 20, 2, '#5E5A55')
-      box(x - 140, y + 26, 280, 20, 2, '#5E5A55')
-      box(x - 140, y - 26, 280, 52, 0, '#3F6E80')
-      if (!reduceMotion) line([[x - 130, y + Math.sin(t) * 2], [x - 40, y + 4 + Math.sin(t + 1) * 2], [x + 50, y + Math.sin(t + 2) * 2], [x + 130, y + 4]], '#6E9AAB', 2)
-      for (const [bx, c] of [[-80, '#E8DFC8'], [10, '#B5523B'], [90, '#E8DFC8']]) {
-        poly([[x + bx - 24, y - 12], [x + bx + 18, y - 12], [x + bx + 28, y - 2], [x + bx + 18, y + 8], [x + bx - 24, y + 8]], c)
-        box(x + bx - 10, y - 8, 14, 10, 2, '#3A2C20')
-      }
-    },
-    harbour ({ x, y }, t) {                     // Steinvågen: a small cove, a breakwater and sjøhus on the edge
-      ellipse(x + 10, y + 14, 115, 48, '#3F6E80')
-      ripple(x + 30, y + 20, 10, 30, t, '#6E9AAB')
-      line([[x - 100, y + 52], [x + 30, y + 64], [x + 110, y + 50]], '#6F675C', 10)   // breakwater
-      for (const [dx, c] of [[-110, '#A8483A'], [-62, '#C9963F'], [-14, '#A8483A']]) {
-        box(x + dx, y - 54, 40, 34, 2, c)
-        poly([[x + dx - 4, y - 54], [x + dx + 20, y - 74], [x + dx + 44, y - 54]], '#3A2C20')
-        box(x + dx + 14, y - 36, 12, 16, 1, '#2A211A')
-      }
-      poly([[x + 40, y + 8], [x + 72, y + 8], [x + 80, y + 16], [x + 72, y + 24], [x + 40, y + 24]], K.cream)
-    },
-    hill ({ x, y }) {                           // Aksla: a green hill, the stairs up its side, Fjellstua on top
-      ellipse(x, y + 6, 120, 74, '#3E5A36')
-      ellipse(x - 6, y - 2, 92, 56, '#4A6B40')
-      ellipse(x - 10, y - 10, 58, 36, '#5F7F4E')
-      line([[x + 96, y + 52], [x + 70, y + 34], [x + 84, y + 18], [x + 56, y + 4], [x + 66, y - 12], [x + 30, y - 22]], '#C9BDA3', 4)
-      box(x - 34, y - 32, 48, 22, 2, '#E4DDCB')
-      poly([[x - 38, y - 32], [x - 10, y - 46], [x + 18, y - 32]], '#3A3E44')
-    },
-    jugend ({ x, y }) {                         // Aspøya: a row of Art Nouveau facades with turrets
-      const fronts = ['#D8C27A', '#A9C3A0', '#D9967E', '#9FB8CC', '#E4DDCB']
-      fronts.forEach((c, i) => {
-        const fx = x - 125 + i * 50
-        box(fx, y - 30, 46, 64, 2, c)
-        if (i % 2) poly([[fx + 6, y - 30], [fx + 23, y - 62], [fx + 40, y - 30]], '#4A4E55')
-        else { poly([[fx, y - 30], [fx + 23, y - 48], [fx + 46, y - 30]], '#4A4E55'); poly([[fx + 30, y - 30], [fx + 37, y - 60], [fx + 44, y - 30]], '#3A3E44') }
-        for (let r = 0; r < 3; r++) for (let w = 0; w < 2; w++) box(fx + 9 + w * 18, y - 22 + r * 18, 9, 11, 4, '#2E3136')
-      })
-    },
-    cove ({ x, y }, t) {                        // Skarbøvika: a pale beach curving round the sea, rocks at the edge
-      ellipse(x, y + 4, 130, 80, '#D2C29C')
-      ctx.save(); ctx.beginPath(); ctx.ellipse(x, y + 4, 130, 80, 0, 0, Math.PI * 2); ctx.clip()
-      ellipse(x, y - 52, 150, 74, '#3F6E80')
-      if (!reduceMotion) line([[x - 130, y + 18 + Math.sin(t) * 3], [x - 45, y + 24 + Math.sin(t + 1) * 3], [x + 45, y + 24 + Math.sin(t + 2) * 3], [x + 130, y + 18 + Math.sin(t + 3) * 3]], '#B9D6DE', 3)
-      ctx.restore()
-      for (const [dx, dy, r] of [[-100, 30, 14], [-82, 46, 10], [96, 34, 16], [110, 18, 9]]) circle(x + dx, y + dy, r, '#7A7E84')
+    kovil ({ x, y }) {                          // Rommen Hindu Temple: white hall, striped base, small pastel gopuram
+      box(x - 105, y - 22, 210, 56, 3, '#EDE6D6')              // flat-roofed hall
+      for (let i = -100; i < 100; i += 14) box(x + i, y + 22, 7, 12, 0, '#B5483A')   // red-and-white base wall
+      line([[x - 105, y - 22], [x + 105, y - 22]], '#C9BFA8', 3)
+      const tiers = [[56, 14, '#E8A0B4'], [46, 12, '#6FC2BE'], [36, 11, '#E8C860'], [26, 10, '#E8A0B4']]
+      let ty = y - 22
+      for (const [w, h, c] of tiers) { ty -= h; box(x - w / 2, ty, w, h, 2, c); line([[x - w / 2, ty + h], [x + w / 2, ty + h]], '#8A7652', 1.5) }
+      circle(x, ty - 5, 5, K.goldLight)                        // kalasam on top
+      box(x - 13, y - 2, 26, 36, 3, '#6E4A32')                 // doorway
+      for (const dx of [-70, -42, 42, 70]) box(x + dx - 7, y - 10, 14, 18, 7, '#9AAAB2')
     },
   }
 
