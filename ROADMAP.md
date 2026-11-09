@@ -22,6 +22,7 @@ Owner hints:
 - **Collision, part 1:** overlapping blobs are pushed apart, half each, the same for bots and humans; caught humans stay solid, blobs under the net are pinned. A headless test compares fake humans with bots over 10 simulated minutes. Still needs a real playtest: about 0.4 walks per blob per minute get stuck in crowds, where a person would steer round.
 - **Easier aiming** (review problem 5): on the Hunter's phone, tapping the same spot again steps through a crowd ("2 of 3 here"), and holding opens a magnifier; lifting aims. Tapping empty space now aims at nothing (it used to aim at blob 0). Not yet tried on a real iPhone.
 - **TV polish** (problems 8 and 9): shot rings stand still with reduced motion; end-of-round name tags move to a free spot with a line back to their blob instead of overlapping.
+- **Post-round replay:** when a round ends, the TV replays each hider's path over the room in a few seconds, with their name on the line, landmarks numbered 1–3 and catches marked ×; paths differ in dash pattern as well as colour. R plays it again. Paths are kept on the TV only and never sent to phones. With reduced motion the whole paths show at once.
 - **Full-screen join view** (J on the TV, or the panel's "Big join screen" button): a very large QR code, the room code and address, and who has joined ("away" in words). It opens by itself before round 1, Enter starts the round from it, and J, Esc or starting a round closes it.
 - **Moved to its own repo**, served at `play.nithun.no/act-natural/` (once the server is set up).
 
@@ -68,7 +69,6 @@ Owner hints:
 | A role for caught players (e.g. a ghost who can mark one blob) | Keeps caught players engaged | M | Claude | decision below |
 | Per-player connection status on the TV (direct or relayed) | Faster troubleshooting | S | Hary | relays on |
 | Relay over port 443 (TURN-TLS behind Nginx's stream module) | Some networks block 3478 and 5349 | M | Hary + Nithun (root) | relays on |
-| Post-round replay of each human's path | Fun reveal | M | Claude | none |
 | More maps, or a data-only map template | Variety for repeat sessions | S each | Claude | none |
 
 ## Decisions for Nithun

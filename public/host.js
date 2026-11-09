@@ -570,13 +570,13 @@
   // End of round: a name over every player's blob. A tag that would overlap another is moved to
   // the nearest free spot (sideways first, then a row up, or below the blob at the top of the
   // room), with a line back to its blob.
-  function nameTags (list) {
+  function nameTags (list, record = true) {
     ctx.font = '600 20px system-ui, sans-serif'
     const placed = []
     const hits = (r) => placed.some(q => r.x < q.x + q.w + 4 && q.x < r.x + r.w + 4 && r.y < q.y + q.h + 2 && q.y < r.y + r.h + 2)
-    for (const p of [...list].sort((a, b) => a.blob.y - b.blob.y)) {
-      const bx = p.blob.x, by = p.blob.y
-      const w = ctx.measureText(p.name).width + 16
+    for (const p of [...list].sort((a, b) => a.y - b.y)) {
+      const bx = p.x, by = p.y
+      const w = ctx.measureText(p.text).width + 16
       const home = by - sim.BLOB_R - 40
       const spots = []
       for (let row = 0; row < 8; row++) {
@@ -591,7 +591,7 @@
       }
       spots.sort((a, b) => a.cost - b.cost)
       const spot = spots.find(sp => !hits({ x: sp.x - w / 2, y: sp.y - 15, w, h: 26 })) || { x: bx, y: home }
-      placed.push({ x: spot.x - w / 2, y: spot.y - 15, w, h: 26, tx: spot.x, ty: spot.y, bx, by, text: p.name })
+      placed.push({ x: spot.x - w / 2, y: spot.y - 15, w, h: 26, tx: spot.x, ty: spot.y, bx, by, text: p.text })
     }
     for (const t of placed) {
       if (Math.abs(t.ty - (t.by - sim.BLOB_R - 40)) > 1 || Math.abs(t.tx - t.bx) > 1) {   // moved: a line shows which blob it belongs to
@@ -600,9 +600,85 @@
       }
     }
     for (const t of placed) tag(t.tx, t.ty, t.text)
-    lastTags = placed
+    if (record) lastTags = placed
   }
   let lastTags = []
+
+  // ---- The replay after a round ----
+  // Each hider's path is drawn over the room, the round squeezed into a few seconds, with their
+  // name riding on the head of the line. Landmarks ticked off are numbered 1–3 on the path, and a
+  // catch is an ×. Paths differ in dash pattern and name as well as colour. With reduced motion
+  // the whole paths are shown at once. R plays it again. Shown only after the round, when
+  // everyone already sees who was who.
+  const PATH_STYLES = [
+    ['#F0D28C', []], ['#8DB4C4', [16, 8]], ['#E89A8A', [4, 7]], ['#A8D08D', [20, 6, 4, 6]],
+    ['#C9A6E8', [10, 5]], ['#F2B880', [2, 6]], ['#7FD1C1', [24, 6, 4, 6, 4, 6]], ['#E8DFC8', [12, 4, 2, 4]],
+  ]
+  const REPLAY_MIN = 4, REPLAY_MAX = 12   // seconds the replay takes, whatever the round's length
+  let replayAt = 0                          // performance.now() when the replay (re)started
+  let replayData = null
+  let lastPhase = null
+  function startReplay () {
+    replayData = game.replay()
+    replayAt = performance.now() - (reduceMotion ? 1e9 : 0)
+  }
+  const replaySeconds = () => replayData ? Math.min(REPLAY_MAX, Math.max(REPLAY_MIN, replayData.length / 8)) : 0
+  const replayProgress = () => replayData ? Math.min(1, (performance.now() - replayAt) / 1000 / replaySeconds()) : 1
+  const replayRunning = () => !!replayData && replayData.paths.length > 0 && replayProgress() < 1
+  function drawReplay () {
+    if (!replayData || !replayData.paths.length) return
+    const prog = replayProgress()
+    const running = prog < 1
+    const now = prog * replayData.length
+    // Dim the room while it runs, so the paths stand out.
+    if (running) { ctx.fillStyle = 'rgba(18,17,15,0.45)'; ctx.fillRect(0, 0, sim.W, sim.H) }
+    const heads = []
+    replayData.paths.forEach((path, i) => {
+      const [colour, dash] = PATH_STYLES[i % PATH_STYLES.length]
+      const pts = path.points
+      let last = 0
+      while (last + 1 < pts.length && pts[last + 1][0] <= now) last++
+      ctx.globalAlpha = running ? 1 : 0.55
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round'
+      for (const [width, style, d] of [[7, 'rgba(18,17,15,0.8)', []], [4, colour, dash]]) {   // a dark edge, then the line
+        ctx.strokeStyle = style; ctx.lineWidth = width; ctx.setLineDash(d)
+        ctx.beginPath(); ctx.moveTo(pts[0][1], pts[0][2])
+        for (let k = 1; k <= last; k++) ctx.lineTo(pts[k][1], pts[k][2])
+        ctx.stroke()
+      }
+      ctx.setLineDash([])
+      // Where it started: a small open square.
+      ctx.strokeStyle = colour; ctx.lineWidth = 3
+      ctx.strokeRect(pts[0][1] - 7, pts[0][2] - 7, 14, 14)
+      for (const ev of path.events) {
+        if (ev.t > now) continue
+        if (ev.kind === 'task') {
+          circle(ev.x, ev.y, 13, 'rgba(18,17,15,0.9)')
+          ctx.strokeStyle = colour; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(ev.x, ev.y, 13, 0, Math.PI * 2); ctx.stroke()
+          ctx.fillStyle = C.blob; ctx.font = '700 15px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+          ctx.fillText(String(ev.n), ev.x, ev.y + 1)
+        } else if (ev.kind === 'caught') {
+          ctx.strokeStyle = 'rgba(18,17,15,0.9)'; ctx.lineWidth = 9
+          for (const w of [9, 4]) {
+            ctx.lineWidth = w; ctx.strokeStyle = w === 9 ? 'rgba(18,17,15,0.9)' : colour
+            ctx.beginPath(); ctx.moveTo(ev.x - 12, ev.y - 12); ctx.lineTo(ev.x + 12, ev.y + 12); ctx.moveTo(ev.x + 12, ev.y - 12); ctx.lineTo(ev.x - 12, ev.y + 12); ctx.stroke()
+          }
+        }
+      }
+      ctx.globalAlpha = 1
+      if (running && last < pts.length) {
+        const hx = pts[last][1], hy = pts[last][2]
+        circle(hx, hy, 9, colour)
+        ctx.strokeStyle = 'rgba(18,17,15,0.9)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(hx, hy, 9, 0, Math.PI * 2); ctx.stroke()
+        heads.push({ x: hx, y: hy + sim.BLOB_R - 9, text: path.name })
+      }
+    })
+    if (running) {
+      nameTags(heads, false)
+      const secs = Math.floor(now)
+      tag(sim.W / 2, 34, `Replay · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`)
+    }
+  }
 
   // The Hunter's selection: a crosshair everyone can see on the TV.
   function drawAim (b, alpha) {
@@ -683,6 +759,12 @@
       acc += dt
       while (acc >= STEP) { sim.step(world, STEP); if (game) onEvents(game.step(STEP)); acc -= STEP }
     }
+    // However a round ends (the clock, a shot, the host), the replay starts as the results show.
+    if (game && game.phase !== lastPhase) {
+      if (lastPhase === 'round' && game.phase === 'results') startReplay()
+      if (game.phase !== 'results') replayData = null
+      lastPhase = game.phase
+    }
     draw()
     requestAnimationFrame(frame)
   }
@@ -707,8 +789,9 @@
       if (game.phase === 'round') for (const [b, n] of game.marks) if (!b.hidden) drawMark(b, n, alpha)
       if (game.aim && game.phase === 'round') drawAim(game.aim, alpha)
       if (game.phase === 'round') for (const shot of game.shotsFired) drawShot(shot)   // after the round, the name tags take over
-      // End of round: everyone sees who was who.
-      if (ended) nameTags([...players.values()].filter(p => !p.blob.hidden))
+      // End of round: everyone sees who was who. While the replay runs, the names ride on the paths.
+      if (game.phase === 'results' && game.round > 0) drawReplay()
+      if (ended && !replayRunning()) nameTags([...players.values()].filter(p => !p.blob.hidden).map(p => ({ x: p.blob.x, y: p.blob.y, text: p.name })))
     }
 
     // HUD, in screen pixels
@@ -747,7 +830,7 @@
       ctx.textAlign = 'center'
       ctx.textBaseline = 'bottom'
       ctx.fillText(game
-        ? 'Enter start / next · E end round · M map · Space pause · F full screen · Q panel · J join screen · H hide this line'
+        ? 'Enter start / next · E end round · M map · Space pause · F full screen · Q panel · J join screen · R replay · H hide this line'
         : 'Space pause · R reveal humans (testing only) · M map · F full screen · H hide this line', cw / 2, ch - 4)
     }
   }
@@ -757,6 +840,7 @@
     const k = e.key.toLowerCase()
     if (k === ' ') { paused = !paused; e.preventDefault() }
     else if (k === 'r' && !game) reveal = !reveal   // demo only: in a real game it would be cheating
+    else if (k === 'r' && game && game.phase === 'results') startReplay()
     else if (k === 'h') showHelp = !showHelp
     else if (k === 'm') nextMap()
     else if (k === 'q' && lobby) lobby.hidden = !lobby.hidden
@@ -773,6 +857,6 @@
   })
 
   if (game) window.addEventListener('pagehide', saveSnapshot)   // the latest state, just in case
-  window.__actNatural = { world, players, game, nameTags: () => lastTags }   // for automated tests
+  window.__actNatural = { world, players, game, nameTags: () => lastTags, replay: () => ({ data: replayData, progress: replayProgress(), running: replayRunning() }) }   // for automated tests
   requestAnimationFrame(frame)
 })()
