@@ -15,7 +15,7 @@ const S = process.argv[2] || require('path').join(__dirname, 'out'); const base 
   await A.waitForSelector('#hmap')
   const g = (f, a) => tv.evaluate(f, a)
 
-  // Pin every blob; put three bots in a tight cluster at P (touching: 0, 30 and 34 world px from it; blobs are 36 across) and clear the area round it.
+  // Pin every blob; put three bots in a tight cluster at P (touching: 0, 30 and 34 world px from it; blobs are 36 across) and clear the area round it and round (400, 800), the empty spot tapped below.
   const P = { x: 800, y: 470 }
   const ids = await g(P => {
     const { world, game: G } = window.__actNatural
@@ -26,7 +26,7 @@ const S = process.argv[2] || require('path').join(__dirname, 'out'); const base 
     let k = 0
     for (const [, x] of live) {   // everyone else well away from P, in a row along the top
       if (bots.some(([, y]) => y === x)) continue
-      if (Math.hypot(x.x - P.x, x.y - P.y) < 300) { x.x = x.px = 120 + (k++ % 20) * 65; x.y = x.py = 120 }
+      if (Math.hypot(x.x - P.x, x.y - P.y) < 300 || Math.hypot(x.x - 400, x.y - 800) < 300) { x.x = x.px = 120 + (k++ % 20) * 65; x.y = x.py = 120 }
     }
     const offs = [[0, 0], [30, 0], [0, 34]]
     bots.forEach(([, x], i) => { x.x = x.px = P.x + offs[i][0]; x.y = x.py = P.y + offs[i][1] })

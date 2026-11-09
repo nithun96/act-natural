@@ -15,6 +15,7 @@
   const CATCH_POINTS = 3
   const MAX_PLAYERS = 20
   const BOT_REVEAL_TIME = 1.5  // a shot bot shows "bot" this long, then leaves the room
+  const PATH_EVERY = 0.1       // seconds between recorded points of each hider's path, for the replay
   const AWAY_GRACE = 10        // seconds a hider can be disconnected and still count as in the round
 
   function create (world) {
@@ -49,7 +50,7 @@
       if (!p) {
         if (g.players.size >= MAX_PLAYERS) return null
         p = { token, name, blob: sim.addHuman(world), conn: null, order: g.players.size, score: 0, roundPts: 0, caught: false, task: null }
-        if (g.phase === 'round') { p.task = sim.dealTasks(); appendAliases() }   // joining mid-round: hide right away
+        if (g.phase === 'round') { p.task = sim.dealTasks(); appendAliases(); p.path = []; p.pathEvents = [] }   // joining mid-round: hide right away
         g.players.set(token, p)
       }
       p.name = name
@@ -88,11 +89,14 @@
         p.caught = false
         p.awaySince = null
         p.task = p === h ? null : sim.dealTasks()
+        p.path = []              // [t, x, y] every PATH_EVERY seconds, for the replay after the round
+        p.pathEvents = []        // { t, x, y, kind: 'task' | 'caught', n }
       }
       h.blob.hidden = true                // the Hunter has no blob
       sim.setInput(h.blob, 0, 0)
       refreshAliases()
       g.timeLeft = ROUND_TIME
+      g.pathClock = 0
       g.shots = START_SHOTS
       g.recharge = 0
       g.lockLeft = 0
@@ -203,7 +207,17 @@
         if (p.caught) continue
         if (heldNow(p.blob)) { if (p.task) p.task.hold = 0; continue }   // held: no task progress
         const pts = sim.stepTask(p.task, p.blob, dt)
-        if (pts) { p.score += pts; p.roundPts += pts; events.push({ type: 'task', player: p }); changed() }
+        if (pts) {
+          p.score += pts; p.roundPts += pts; events.push({ type: 'task', player: p }); changed()
+          if (p.pathEvents) p.pathEvents.push({ t: roundTime(), x: p.blob.x, y: p.blob.y, kind: 'task', n: p.task.done })
+        }
+      }
+      // Each hider's path, for the replay after the round. Only the TV keeps it; it is shown once
+      // the round is over and everyone can see who was who anyway.
+      g.pathClock += dt
+      if (g.pathClock >= PATH_EVERY) {
+        g.pathClock -= PATH_EVERY
+        for (const p of hiders()) if (p.path && !p.caught) recordPoint(p)
       }
       // How long each hider has been disconnected, so a short drop-out (a reload, a network
       // switch) doesn't end the round, but a phone that has left doesn't hold it up either.
@@ -218,6 +232,9 @@
       }
       return events
     }
+
+    const roundTime = () => Math.round((ROUND_TIME - g.timeLeft) * 100) / 100
+    function recordPoint (p) { p.path.push([roundTime(), Math.round(p.blob.x), Math.round(p.blob.y)]) }
 
     // Hiders who still count: not caught, and connected or only just dropped out.
     const stillIn = () => hiders().filter(p => !p.caught && (p.conn || p.awaySince == null || world.time - p.awaySince < AWAY_GRACE))
@@ -304,6 +321,7 @@
         b.out = true
         sim.setInput(b, 0, 0)
         victim.caught = true
+        if (victim.path) { recordPoint(victim); victim.pathEvents.push({ t: roundTime(), x: b.x, y: b.y, kind: 'caught' }) }
         if (victim.task) victim.task.hold = 0
         p.score += CATCH_POINTS
         p.roundPts += CATCH_POINTS
@@ -379,6 +397,14 @@
       for (const [a, b] of g.aliases) if (b === blob) return a
       return null
     }
+
+    // The replay after a round: each hider's path and what happened on it. Hiders who joined
+    // late or came back after a TV reload may have none.
+    g.replay = () => ({
+      length: Math.max(0.1, ROUND_TIME - Math.max(0, g.timeLeft)),
+      paths: hiders().filter(p => p.path && p.path.length > 1).sort((a, b) => a.order - b.order)
+        .map(p => ({ name: p.name, order: p.order, points: p.path, events: p.pathEvents, caught: p.caught })),
+    })
 
     g.scoreboard = () => [...g.players.values()].sort((a, b) => b.score - a.score || a.order - b.order)
 
