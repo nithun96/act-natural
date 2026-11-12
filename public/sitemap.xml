@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The pages search engines may index. Listed in robots.txt (served by Nginx, nginx/play.nithun.no). -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://play.nithun.no/act-natural/</loc></url>
+  <url><loc>https://play.nithun.no/act-natural/how.html</loc></url>
+</urlset>

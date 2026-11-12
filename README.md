@@ -26,9 +26,10 @@ Plain HTML, JavaScript and canvas, no framework. The TV page is the game's serve
 | `public/phone.js` | The phone screens: controller, Hunter, results |
 | `public/net.js`, `public/relay.js` | Networking: PeerJS set-up, routes, the encrypted MQTT relay |
 | `public/how.html` | How to play |
+| `public/sitemap.xml` | The pages search engines may index (landing and how-to) |
 | `scripts/build.js` | Builds `dist/`: copies `public/`, the libraries into `dist/vendor/`, and makes `turn.js` |
 | `server/turn/`, `server/mqtt/` | Set-up for the two relays on the server (coturn, Mosquitto) |
-| `nginx/play.nithun.no` | The Nginx site |
+| `nginx/play.nithun.no` | The Nginx site, incl. `robots.txt` and which URLs get `X-Robots-Tag: noindex` (game screens, anything with a query string) |
 | `tests/` | Headless tests (Playwright) |
 
 **Networking is Hary's area** (`net.js`, `relay.js`, the connection code in `host.js` and `phone.js`, the relays, the Nginx proxy locations). Talk to him before changing it.

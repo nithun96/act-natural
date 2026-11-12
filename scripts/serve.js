@@ -8,7 +8,7 @@ import { extname, normalize } from 'path'
 
 const port = Number(process.argv[2] || process.env.PORT || 8765)
 const dist = new URL('../dist/', import.meta.url).pathname
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.txt': 'text/plain; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json' }
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.txt': 'text/plain; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.xml': 'application/xml' }
 
 const PREFIX = '/act-natural/'
 

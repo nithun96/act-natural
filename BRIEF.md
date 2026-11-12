@@ -10,7 +10,7 @@ A party game for an AI workshop where 6–20 people play together (12 right now)
 
 **The pitch:** the TV shows a room full of identical blobs, and most of them are bots wandering around at random. Each human controls one blob from their phone and has to finish secret tasks without moving like a human. One player is the Hunter, who shoots to pick out the humans: one shot to start, another every 20 s (up to three), a 5 s lock after hitting a bot, and up to three suspects marked on the TV (changed 08.11.2026 from 3 shots per round).
 
-It will live at `nithun.no/lab/act-natural/`. It won't be linked from the site and will be marked noindex.
+It will live at `nithun.no/lab/act-natural/`. It won't be linked from the site and will be marked noindex. (Changed 12.11.2026: it moved to `play.nithun.no/act-natural/`; the landing and how-to pages may now appear on Google, game screens with a query string stay noindex. See `nginx/play.nithun.no`.)
 
 ## Rules (v1)
 
