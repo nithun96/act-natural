@@ -3,10 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="robots" content="noindex, nofollow">
-<title>Act Natural</title>
-<!-- Party game for the AI workshop (Nov 2026), see ACT-NATURAL-BRIEF.md in the repo.
-     Not linked from the site. ?host is the TV, ?room=CODE a phone, ?host&demo=6 the TV with no network.
+<title>Act Natural – a party game for a TV and everyone's phones</title>
+<meta name="description" content="Act Natural is a party game for a TV and everyone's phones. Most blobs on screen are bots; the humans must finish secret tasks without moving like a human, while the Hunter tries to spot them.">
+<link rel="canonical" href="https://play.nithun.no/act-natural/">
+<!-- Party game for the AI workshop (Nov 2026), see BRIEF.md in the repo.
+     Search engines may index this page without parameters; every URL with a query string (game screens)
+     gets X-Robots-Tag: noindex from Nginx (nginx/play.nithun.no, map $play_robots).
+     ?host is the TV, ?room=CODE a phone, ?host&demo=6 the TV with no network.
      Networking: direct WebRTC (PeerJS) first, the encrypted MQTT relay (relay.js) for networks that block it.
      vendor/: PeerJS and qrcode-generator (both MIT) are npm dependencies (versions in package.json); vite.config.js copies them
      into the build and serves them in `npm run dev`, so the CSP can stay script-src 'self'. -->

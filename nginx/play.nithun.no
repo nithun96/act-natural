@@ -17,6 +17,16 @@ map $http_upgrade $play_connection {
     ''      close;
 }
 
+# What search engines may index: only the front page, the game's landing page and its how-to
+# page, at exactly these addresses. Everything else, above all game screens (any query string:
+# ?host, ?room=CODE, ?host&demo=6 …), gets X-Robots-Tag: noindex. An empty value sends no header.
+map $request_uri $play_robots {
+    default                 "noindex, nofollow";
+    "/"                     "";
+    "/act-natural/"         "";
+    "/act-natural/how.html" "";
+}
+
 server {
     listen 80;
     listen [::]:80;
@@ -42,10 +52,17 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Content-Security-Policy "default-src 'self'; frame-ancestors 'none'" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Robots-Tag "noindex, nofollow" always;
+    add_header X-Robots-Tag $play_robots always;
 
     gzip_types text/css application/javascript text/plain;
     gzip_vary on;
+
+    # Crawlers may read everything (they must, to see the noindex on game screens). The sitemap
+    # ships with the game (public/sitemap.xml).
+    location = /robots.txt {
+        default_type text/plain;
+        return 200 "User-agent: *\nAllow: /\n\nSitemap: https://play.nithun.no/act-natural/sitemap.xml\n";
+    }
 
     # For now the root goes to the only game. Later: a small index of games.
     location = / {
@@ -105,7 +122,7 @@ server {
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
         add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
         add_header Cross-Origin-Opener-Policy "same-origin" always;
-        add_header X-Robots-Tag "noindex, nofollow" always;
+        add_header X-Robots-Tag $play_robots always;
         try_files $uri ${uri}index.html =404;
     }
 }
